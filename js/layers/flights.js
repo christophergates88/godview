@@ -15,7 +15,19 @@ let preferred = null;       // id of the provider that last worked
 let selectedKey = null;
 let blockedNoRelay = false; // all sources blocked and no relay: stop retrying on every camera move
 
+const readsbParse = (j) => PROVIDERS.find((p) => p.id === 'airplaneslive').parse(j);
+
 export const PROVIDERS = [
+  {
+    id: 'adsblol',
+    name: 'adsb.lol',
+    url(v) {
+      return fill(ENDPOINTS.flights.adsblol, {
+        lat: v.lat.toFixed(3), lon: v.lon.toFixed(3), radiusNm: Math.round(Math.min(250, v.radiusKm / 1.852)),
+      });
+    },
+    parse(j) { return readsbParse(j); },
+  },
   {
     id: 'opensky',
     name: 'OpenSky Network',
@@ -91,7 +103,7 @@ export default {
   name: 'Flights',
   color: COLORS.flights,
   icon: '<svg viewBox="0 0 24 24"><path d="M12 2.5c.8 0 1.3.9 1.3 2v5l8 4.6v2l-8-2.4v4.6l2.4 1.8v1.6L12 20.8l-3.7.9v-1.6l2.4-1.8v-4.6l-8 2.4v-2l8-4.6v-5c0-1.1.5-2 1.3-2z" fill="currentColor"/></svg>',
-  attribution: 'Flights: OpenSky Network (opensky-network.org) or airplanes.live, community ADS-B receivers',
+  attribution: 'Flights: adsb.lol (ODbL), OpenSky Network or airplanes.live, community ADS-B receivers',
   followRange: 40000,
 
   init(ctx) {

@@ -11,8 +11,8 @@
 // It only forwards to the flight hosts listed below, so it cannot be abused as
 // a general proxy. Put your GitHub Pages address in ALLOWED_ORIGIN.
 
-const ALLOWED_HOSTS = ['opensky-network.org', 'api.airplanes.live'];
-const ALLOWED_ORIGIN = 'https://YOUR-USERNAME.github.io';
+const ALLOWED_HOSTS = ['opensky-network.org', 'api.airplanes.live', 'api.adsb.lol', 'opendata.adsb.fi'];
+const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 
 export default {
   async fetch(request) {

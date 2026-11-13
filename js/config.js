@@ -60,6 +60,7 @@ export const ENDPOINTS = {
   // confirmed to allow direct browser access (CORS); the layer reports
   // clearly if all are blocked. A "relay" URL in Settings fixes that.
   flights: {
+    adsblol: 'https://api.adsb.lol/v2/point/{lat}/{lon}/{radiusNm}',
     opensky: 'https://opensky-network.org/api/states/all?lamin={lamin}&lomin={lomin}&lamax={lamax}&lomax={lomax}',
     airplaneslive: 'https://api.airplanes.live/v2/point/{lat}/{lon}/{radiusNm}',
   },

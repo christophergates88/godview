@@ -17,7 +17,7 @@ const defaults = () => ({
   quakeFeed: '2.5_day',
   eventDays: 30,
   smoothMotion: true,
-  flightRelay: '',            // optional prefix URL, e.g. https://my-relay.example.workers.dev/?url=
+  flightRelay: 'https://godview-flights.christophergates-cg.workers.dev/?url=',  // the owner's Cloudflare relay (extras/flight-relay-worker.js)
 });
 
 function read(key) {
@@ -32,6 +32,7 @@ const listeners = new Set();
 
 function merge(base, saved) {
   const out = { ...base, ...saved };
+  if (!out.flightRelay) out.flightRelay = base.flightRelay; // a blank saved value falls back to the built-in relay
   for (const k of ['start', 'intervals', 'enabled']) out[k] = { ...base[k], ...(saved[k] || {}) };
   return out;
 }
