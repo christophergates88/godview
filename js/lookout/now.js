@@ -37,7 +37,7 @@ function layout() {
     <div id="nw-alerts"></div>
     <div class="lk-sec"><h2>Quick</h2></div>
     <div class="lk-actions">
-      <button class="lk-act" id="nw-drive">${ICON.car}Drive mode</button>
+      <button class="lk-act" id="nw-drive">${ICON.car}Drive</button>
       <button class="lk-act" id="nw-map">${ICON.globe}Map here</button>
       <button class="lk-act" data-go="scanner">${ICON.radio}Scanner</button>
       <button class="lk-act" data-go="news">${ICON.news}News</button>

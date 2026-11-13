@@ -323,7 +323,7 @@ function paint() {
   // Weather alert for where you are
   const top = S.alerts[0];
   $('dv-alert').innerHTML = top
-    ? `<div class="dv-al l${top.level}">${ICO.warn}<div><b>${h(top.event)}</b><small>${top.ends ? `Until ${h(clock(top.ends))}` : h(String(top.area || '').split(';')[0])}${S.alerts.length > 1 ? ` · +${S.alerts.length - 1} more` : ''}</small></div></div>`
+    ? `<div class="dv-al l${top.level}">${ICO.warn}<div><b>${h(top.event)}</b><small>${top.ends ? `Until ${h(untilText(top.ends))}` : h(String(top.area || '').split(';')[0])}${S.alerts.length > 1 ? ` · +${S.alerts.length - 1} more` : ''}</small></div></div>`
     : '<div class="dv-al l0"><div><b>No weather alerts here</b><small>Checked for where you are now</small></div></div>';
   // Road problems ahead
   const list = ahead();
@@ -387,6 +387,8 @@ function flash(title, sub, kind) {
 }
 
 // ---------------------------------------------------------------- voice, sound, screen
+// "9:00 AM" today, "Sun 9:00 AM" on another day
+const untilText = (ms) => (new Date(ms).toDateString() === new Date().toDateString() ? clock(ms) : `${new Date(ms).toLocaleDateString([], { weekday: 'short' })} ${clock(ms)}`);
 const spokenRoad = (r) => String(r).replace(/\bI-?(\d+)/g, 'I $1').replace(/\bSR\s*(\d+)/g, 'State Route $1').replace(/\bUS-?(\d+)/g, 'U.S. $1');
 const spokenDist = (km) => { const mi = km * 0.621371; return imperial() ? (mi < 1 ? 'under a mile' : `${Math.round(mi)} mile${Math.round(mi) === 1 ? '' : 's'}`) : `${Math.round(km)} kilometres`; };
 
