@@ -1,0 +1,56 @@
+name: Data packs
+
+# Weekly copies of public datasets whose live servers are too slow or too often
+# down to read from a phone: plate-reader cameras (OpenStreetMap), cell towers
+# (FCC via HIFLD) and hospitals and nursing homes (HIFLD and CMS). Built by
+# scripts/build_packs.py and published to the `data` branch, which the app
+# reads from raw.githubusercontent.com. Uses no secrets.
+
+on:
+  schedule:
+    - cron: "41 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      packs:
+        description: "Packs to rebuild, separated by spaces (blank = all): alpr towers care"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: packs
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start from the current packs (a pack that fails keeps its last copy)
+        run: |
+          mkdir -p out
+          if git fetch -q --depth 1 origin data 2>/dev/null; then
+            git archive --format=tar FETCH_HEAD | tar -x -C out
+          fi
+          ls out
+
+      - name: Build
+        env:
+          PACKS: ${{ github.event.inputs.packs }}
+        run: python3 scripts/build_packs.py out $PACKS
+
+      - name: Publish to the data branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd out
+          git init -q
+          git checkout -q -b data
+          git add .
+          git -c user.name=godview-packs -c user.email=actions@users.noreply.github.com \
+            commit -qm "packs $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -q --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" data
