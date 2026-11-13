@@ -42,9 +42,18 @@ async function headlines(p, which) {
       return { list: list.sort((a, b) => b.t - a.t), via: 'Google News' };
     } catch { /* try Bing */ }
     try {
-      const xml = await getData(fillUrl(ENDPOINTS.bingNews, { q: `${town} ${stateName}` }), { type: 'text', timeoutMs: 12000 });
-      const since = Date.now() - (which === 'hour' ? 3600e3 : 7 * 86400e3);
-      const list = parseRss(xml).filter((a) => !a.t || a.t >= since);
+      // Bing ranks by relevance and mixes in old stories: ask for the county and the town, keep the recent ones.
+      const qs = [...new Set([p.county ? `${p.county} ${stateName}` : '', `${town} ${stateName}`].filter(Boolean))];
+      const parts = await Promise.allSettled(qs.map((x) => getData(fillUrl(ENDPOINTS.bingNews, { q: x }), { type: 'text', timeoutMs: 12000 }).then(parseRss)));
+      if (parts.every((r) => r.status === 'rejected')) throw parts[0].reason;
+      const since = Date.now() - (which === 'hour' ? 3600e3 : 30 * 86400e3);
+      const seen = new Set();
+      const list = parts.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])).filter((a) => {
+        const k = a.title.toLowerCase().slice(0, 60);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return a.t >= since;
+      });
       return { list: list.sort((a, b) => b.t - a.t), via: 'Bing News' };
     } catch (e) {
       if (which === 'hour') throw e;
@@ -64,7 +73,7 @@ async function render() {
   const box = $('lk-news');
   if (!p) { box.innerHTML = '<div class="lk-empty">Finding where you are…</div>'; return; }
   const n = ++seq;
-  box.innerHTML = `<div class="seg lk-seg"><button data-s="local" class="${span === 'local' ? 'on' : ''}">This week</button><button data-s="hour" class="${span === 'hour' ? 'on' : ''}">Last hour</button></div>
+  box.innerHTML = `<div class="seg lk-seg"><button data-s="local" class="${span === 'local' ? 'on' : ''}">Recent</button><button data-s="hour" class="${span === 'hour' ? 'on' : ''}">Last hour</button></div>
     <div id="nw-list"><div class="lk-empty">Loading headlines for ${h(placeName(p))}…</div></div>
     ${section('More news')}<div class="lk-rows">${newsLinks(p).map(row).join('')}</div>`;
   for (const b of box.querySelectorAll('[data-s]')) b.onclick = () => { span = b.dataset.s; render(); };
@@ -73,7 +82,7 @@ async function render() {
     if (n !== seq || !$('nw-list')) return;
     $('nw-list').innerHTML = r.list.length
       ? `${r.list.slice(0, 40).map((a) => `<a class="story" href="${h(a.url)}" target="_blank" rel="noopener"><div><b>${h(a.title)}</b><small>${h([a.source, a.t ? ago(a.t) : ''].filter(Boolean).join(' · '))}</small></div></a>`).join('')}<p class="muted small">Headlines from ${h(r.via)}. Stories open in Safari.</p>`
-      : `<div class="lk-empty">${span === 'hour' ? 'Nothing new in the last hour.' : 'No local headlines found this week.'}</div>`;
+      : `<div class="lk-empty">${span === 'hour' ? 'Nothing new in the last hour.' : 'No recent local headlines found.'}</div>`;
   } catch (e) {
     if (n === seq && $('nw-list')) $('nw-list').innerHTML = `<div class="lk-empty">Headlines did not load (${h(e.message)}). The links below always work.</div>`;
   }

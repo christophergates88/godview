@@ -10,6 +10,7 @@ import { fmt, escapeHtml } from './core/units.js';
 import { distKm, inRing } from './layers/lib/geo.js';
 import * as watch from './watch.js';
 import { inferFromManager } from './infer.js';
+import { alertLevel } from './lookout/feeds.js';
 
 const $ = (id) => document.getElementById(id);
 const WMO = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'cloudy', 45: 'fog', 48: 'fog', 51: 'drizzle', 53: 'drizzle', 55: 'drizzle', 61: 'light rain', 63: 'rain', 65: 'heavy rain', 71: 'light snow', 73: 'snow', 75: 'heavy snow', 80: 'showers', 81: 'showers', 82: 'heavy showers', 95: 'thunderstorms', 96: 'storms with hail', 99: 'storms with hail' };
@@ -73,8 +74,10 @@ export async function computeStatus(pt) {
   }
   // Weather alerts loaded in the app that cover the point
   if (!headline) {
-    const hits = itemsOf('alerts').filter((a) => (a.rings || []).some((r) => inRing(pt.lat, pt.lon, r)));
-    if (hits.length) { level = Math.max(level, /Warning/i.test(hits[0].title) ? 2 : 1); headline = `${/Warning/i.test(hits[0].title) ? 'Act now' : 'Heads-up'}: ${hits[0].title}`; }
+    // Graded by NWS severity: a tornado or severe thunderstorm warning is "act now", a freeze warning a heads-up.
+    const lv = (a) => alertLevel({ event: a.title, severity: a.severity }) || 1;
+    const hits = itemsOf('alerts').filter((a) => (a.rings || []).some((r) => inRing(pt.lat, pt.lon, r))).sort((x, y) => lv(y) - lv(x));
+    if (hits.length) { const l = lv(hits[0]); level = Math.max(level, l); headline = `${l === 2 ? 'Act now' : 'Heads-up'}: ${hits[0].title}`; }
   }
   if (!headline) headline = pt.label === 'Here' ? 'All clear here' : `All clear near ${pt.label}`;
   // An inference nearby (medium or high confidence), clearly marked
