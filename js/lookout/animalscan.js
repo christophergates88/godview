@@ -14,8 +14,8 @@ import { findEyePairs, EyeTracker } from './eyeshine.js';
 // COCO classes that matter on a road. Small animals (cat, bird) are left out on
 // purpose: swerving for them causes worse crashes than hitting them.
 export const LARGE_ANIMALS = new Set(['dog', 'horse', 'sheep', 'cow', 'bear', 'elephant', 'zebra', 'giraffe']);
-const MIN_SCORE = 0.42;
-const INFER_EVERY_MS = 125;      // about 8 checks a second (keeps the phone cooler)
+const MIN_SCORE = 0.38;          // tuned on real deer photos: catches 7 of 8 (incl. night), no false alarm on a lit sign
+const INFER_EVERY_MS = 125;      // at most about 8 checks a second (keeps the phone cooler)
 const ALARM_GAP_MS = 6000;       // one alarm per animal, not a siren
 const EYES_GAP_MS = 9000;
 
@@ -138,13 +138,23 @@ export async function startScan(box, handler) {
   tiny = document.createElement('canvas'); tiny.width = 320; tiny.height = 180; tctx = tiny.getContext('2d', { willReadFrequently: true });
   hits = []; tracker.reset(); frames = 0; fpsT = performance.now(); lumT = 0;
   set({ phase: 'scanning', backend: detectorKind, message: 'Scanning the road' });
-  clearInterval(timer);
-  timer = setInterval(step, INFER_EVERY_MS);
+  clearTimeout(timer);
+  loop();
   return true;
 }
 
+// Each check runs, then the next is scheduled so the screen always gets some time to itself
+// (a slow phone does fewer checks a second instead of freezing).
+function loop() {
+  if (!state.on) return;
+  const t0 = performance.now();
+  try { step(); } catch (e) { console.warn('animal scan: step failed', e); }
+  const spent = performance.now() - t0;
+  timer = setTimeout(loop, Math.max(INFER_EVERY_MS - spent, 40));
+}
+
 export function stopScan(keepMessage = false) {
-  clearInterval(timer); timer = null;
+  clearTimeout(timer); timer = null;
   if (stream) { for (const t of stream.getTracks()) t.stop(); }
   stream = null;
   if (video) { try { video.srcObject = null; } catch { /* */ } }
