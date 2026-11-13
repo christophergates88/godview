@@ -18,7 +18,7 @@ export function parseRss(xml) {
   const doc = new DOMParser().parseFromString(String(xml || ''), 'text/xml');
   return [...doc.querySelectorAll('item')].map((it) => {
     const q = (sel) => (it.querySelector(sel)?.textContent || '').trim();
-    const source = q('source');
+    const source = q('source') || (it.getElementsByTagName('News:Source')[0]?.textContent || '').trim();
     let title = q('title');
     if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3));
     return { title, source, url: q('link'), t: Date.parse(q('pubDate')) || 0 };
@@ -28,15 +28,24 @@ export function parseRss(xml) {
 async function headlines(p, which) {
   const place = placeName(p);
   const stateName = STATES[p.state] || p.stateName || '';
-  const q = which === 'hour' ? `"${p.city || p.name}" ${stateName} when:1h` : `"${p.city || p.name}" ${stateName} when:7d`;
+  const town = p.city || p.name;
+  // The town or its county ("North Twiggs" alone finds little; "Twiggs County" finds the local paper).
+  const where = p.county && p.county !== town ? `("${town}" OR "${p.county}")` : `"${town}"`;
+  const q = `${where} ${stateName} when:${which === 'hour' ? '1h' : '7d'}`;
   return remember(`news:${which}:${place}`, 10 * 60e3, async () => {
-    // Google sometimes turns the relay away for a moment ("unusual traffic"); one retry usually gets through.
-    const google = () => getData(fillUrl(ENDPOINTS.googleNews, { q }), { type: 'text', timeoutMs: 15000 });
+    // Google sometimes turns the relay away for a moment ("unusual traffic"): one retry, then Bing.
+    const google = () => getData(fillUrl(ENDPOINTS.googleNews, { q }), { type: 'text', timeoutMs: 12000 });
     try {
       let xml;
-      try { xml = await google(); } catch { await new Promise((r) => setTimeout(r, 1500)); xml = await google(); }
+      try { xml = await google(); } catch { await new Promise((r) => setTimeout(r, 1200)); xml = await google(); }
       const list = parseRss(xml);
       return { list: list.sort((a, b) => b.t - a.t), via: 'Google News' };
+    } catch { /* try Bing */ }
+    try {
+      const xml = await getData(fillUrl(ENDPOINTS.bingNews, { q: `${town} ${stateName}` }), { type: 'text', timeoutMs: 12000 });
+      const since = Date.now() - (which === 'hour' ? 3600e3 : 7 * 86400e3);
+      const list = parseRss(xml).filter((a) => !a.t || a.t >= since);
+      return { list: list.sort((a, b) => b.t - a.t), via: 'Bing News' };
     } catch (e) {
       if (which === 'hour') throw e;
       // Backup: GDELT's article search (last 3 days)

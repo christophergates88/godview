@@ -108,6 +108,7 @@ export const ENDPOINTS = {
   openmhzCalls: 'https://api.openmhz.com/{system}/calls',
   openmhzTalkgroups: 'https://api.openmhz.com/{system}/talkgroups',
   googleNews: 'https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en',   // through the data relay (no CORS)
+  bingNews: 'https://www.bing.com/news/search?q={q}&format=rss&count=30',              // through the data relay (no CORS); backup
   gdeltNews: 'https://api.gdeltproject.org/api/v2/doc/doc?query={q}&mode=artlist&maxrecords=30&format=json&sort=datedesc&timespan=3d',
   wazeEmbed: 'https://embed.waze.com/iframe?zoom=12&lat={lat}&lon={lon}&ct=livemap&pin=1',
   ga511Cameras: 'https://511ga.org/api/v2/get/cameras?key={key}&format=json',
@@ -134,6 +135,7 @@ export const ENDPOINTS = {
 // "fallback" = try direct first, use the relay only if the browser blocks it.
 export const RELAY_HOSTS = {
   'news.google.com': 'only',          // Lookout News (RSS)
+  'www.bing.com': 'only',             // Lookout News backup (RSS)
   'api.openmhz.com': 'fallback',      // Lookout Scanner: often refuses web pages when busy
   'api.gdeltproject.org': 'fallback', // Lookout News backup
   'api.adsb.lol': 'only',

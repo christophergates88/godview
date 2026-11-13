@@ -333,3 +333,6 @@ export const newsRss = (q) => `<?xml version="1.0" encoding="UTF-8"?><rss versio
 <item><title>Sample County opens new bridge - Sample Gazette</title><link>https://news.google.com/rss/articles/sample1</link><pubDate>${new Date(now - 2 * 3600e3).toUTCString()}</pubDate><source url="https://gazette.example">Sample Gazette</source></item>
 <item><title>Storm cleanup continues in Sampleville - Sample TV</title><link>https://news.google.com/rss/articles/sample2</link><pubDate>${new Date(now - 26 * 3600e3).toUTCString()}</pubDate><source url="https://tv.example">Sample TV</source></item>
 </channel></rss>`;
+export const bingRss = () => `<?xml version="1.0" encoding="utf-8" ?><rss version="2.0" xmlns:News="https://www.bing.com/news/search?q=sample&amp;format=rss"><channel><title>Sample - BingNews</title>
+<item><title>Bing sample: county fair opens</title><link>http://www.bing.com/news/apiclick.aspx?url=https%3a%2f%2fpaper.example%2fstory</link><description>Sample.</description><pubDate>${new Date(now - 3 * 3600e3).toUTCString()}</pubDate><News:Source>Sample Paper</News:Source></item>
+</channel></rss>`;

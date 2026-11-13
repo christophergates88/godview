@@ -36,6 +36,7 @@ const ALLOWED_HOSTS = [
   'news.google.com',              // local news (RSS; web pages cannot read it directly)
   'api.openmhz.com',              // scanner systems and calls (fallback only)
   'api.gdeltproject.org',         // news backup (fallback only)
+  'www.bing.com',                 // news backup (Bing News RSS)
 ];
 const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 

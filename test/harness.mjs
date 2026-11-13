@@ -113,7 +113,8 @@ export function answer(u, mode) {
       if (/\/talkgroups/.test(p)) return J(F.omhzTalkgroups());
       return J({}, 404);
     case 'media2.openmhz.com': return { status: 200, type: 'audio/wav', body: SILENT_WAV };
-    case 'news.google.com': return T(F.newsRss(u.searchParams.get('q') || ''), 'application/rss+xml');
+    case 'news.google.com': return mode.googleNewsDown ? { status: 503, type: 'text/html', body: '<html><title>Sorry...</title></html>' } : T(F.newsRss(u.searchParams.get('q') || ''), 'application/rss+xml');
+    case 'www.bing.com': return T(F.bingRss(), 'application/rss+xml');
     case 'api.gdeltproject.org': return J({ articles: [] });
     case 'embed.waze.com': return T('<!doctype html><title>Waze</title><body style="background:#123">Waze live map (sample)</body>', 'text/html');
     case 'imgproxy.windy.com': return { status: 200, type: 'image/png', body: TILE };

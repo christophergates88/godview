@@ -904,12 +904,17 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
 
   // A ?tab= link opens that tab (the old Lookout address forwards to ?tab=now)
   const c2 = await browser.newContext(iphone);
-  await setupRoutes(c2, { lookout: { openTo: 'map', place } });
+  await setupRoutes(c2, { lookout: { openTo: 'map', place }, googleNewsDown: true });
   const p2 = await c2.newPage();
   await p2.goto(BASE + '?tab=cams', { waitUntil: 'load' });
   await p2.waitForTimeout(1500);
   const t2 = await p2.evaluate(() => ({ cams: !document.getElementById('lk-cams').hidden, current: document.querySelector('#tabbar [aria-current="page"]')?.dataset.tab }));
   check('?tab=cams opens the Cams tab', t2.cams && t2.current === 'cams', JSON.stringify(t2));
+  // Google News turns the relay away: one retry, then Bing News
+  await p2.click('#tabbar [data-tab="news"]');
+  await p2.waitForFunction(() => document.querySelectorAll('#nw-list .story').length > 0, null, { timeout: 20000 }).catch(() => {});
+  const bn = await p2.evaluate(() => ({ first: document.querySelector('#nw-list .story b')?.textContent, src: document.querySelector('#nw-list .story small')?.textContent, via: document.getElementById('nw-list')?.innerText || '' }));
+  check('News: when Google turns the relay away, Bing News fills in (source shown)', bn.first === 'Bing sample: county fair opens' && /Sample Paper/.test(bn.src || '') && /Bing News/.test(bn.via), JSON.stringify(bn).slice(0, 200));
   await c2.close();
 }
 

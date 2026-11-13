@@ -15,7 +15,15 @@ export const weather = (p) => remember(`wx:${key(p)}`, 10 * 60e3,
   () => getData(fillUrl(ENDPOINTS.weatherNow, { lat: p.lat.toFixed(3), lon: p.lon.toFixed(3) }), { timeoutMs: 12000 }));
 
 // National Weather Service alerts covering the point (US only), most serious first.
-export function alertLevel(a) { return /warning|emergency/i.test(a.event) ? 2 : /watch|advisory|statement|outlook/i.test(a.event) ? 1 : 0; }
+// Act now (2) for extreme or severe warnings (tornado, severe thunderstorm, flash flood);
+// heads-up (1) for watches, advisories and milder warnings (freeze, frost, wind).
+export function alertLevel(a) {
+  const sev = String(a.severity || '').toLowerCase();
+  if (/watch/i.test(a.event)) return 1;
+  if (/extreme|severe/.test(sev)) return 2;
+  if (/warning|emergency/i.test(a.event)) return sev && sev !== 'unknown' ? 1 : 2;
+  return /advisory|statement|outlook|alert/i.test(a.event) || sev === 'moderate' ? 1 : 0;
+}
 export const alerts = (p) => remember(`al:${key(p)}`, 3 * 60e3, async () => {
   const j = await getData(fillUrl(ENDPOINTS.nwsPoint, { lat: p.lat.toFixed(4), lon: p.lon.toFixed(4) }), { timeoutMs: 12000 });
   const now = Date.now();
