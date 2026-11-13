@@ -119,7 +119,7 @@ export function makePointLayer(spec) {
       if (spec.describe) return spec.describe(it, ctx);
       return {
         title: it.title, subtitle: it.subtitle || ctx.fmt.latlon(it.lat, it.lon), rows: it.rows || [],
-        link: it.link, text: it.text, image: it.image, audio: it.audio, followable: !!spec.followRange, live: !!spec.tick,
+        say: it.say, link: it.link, text: it.text, image: it.image, audio: it.audio, followable: !!spec.followRange, live: !!spec.tick,
       };
     },
 
@@ -153,6 +153,39 @@ export function makePointLayer(spec) {
     },
   };
   if (spec.onSettingChange) layer.onSettingChange = spec.onSettingChange;
-  if (spec.tick) layer.tick = (ctx, now) => spec.tick(ctx, now, items, coll);
+
+  // Zoom-dependent look for busy layers: far out, fewer and smaller marks
+  // (nearest to the view centre first); close in, everything at full size.
+  let lodKey = '';
+  const lodTick = (ctx) => {
+    if (!coll || items.size < 60) return false;
+    const v = ctx.view();
+    const far = v.heightKm > (spec.lodKm || 700);
+    const key = `${far}|${v.lat.toFixed(1)}|${v.lon.toFixed(1)}|${items.size}|${selected}`;
+    if (key === lodKey) return false;
+    lodKey = key;
+    const cap = spec.lodCap || 120;
+    let keep = null;
+    if (far && items.size > cap) {
+      const cosl = Math.cos(v.lat * Math.PI / 180);
+      keep = new Set([...items.values()].map((it) => [((it.lat - v.lat) ** 2 + ((it.lon - v.lon) * cosl) ** 2), String(it.key)])
+        .sort((a, b) => a[0] - b[0]).slice(0, cap).map((x) => x[1]));
+    }
+    for (let i = 0; i < coll.length; i++) {
+      const p = coll.get(i);
+      const on = p.id.key === selected;
+      if (shape === 'point') {
+        p.show = on || !keep || keep.has(p.id.key);
+        p.pixelSize = on ? 12 : far ? Math.max(3, (spec.size || 8) * 0.55) : (spec.size || 8);
+      } else {
+        p.show = on || !keep || keep.has(p.id.key);
+        p.scale = on ? 1.15 : far ? 0.5 : (shape === 'plane' ? 0.75 : 0.8);
+      }
+    }
+    return true;
+  };
+  layer.tick = (ctx, now) => { const a = spec.tick ? spec.tick(ctx, now, items, coll) : false; const b = lodTick(ctx); return a || b; };
+  const baseRender = layer.render;
+  layer.render = (ctx, data) => { lodKey = ''; const n = baseRender.call(layer, ctx, data); lodTick(ctx); return n; };
   return layer;
 }

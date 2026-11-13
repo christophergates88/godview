@@ -119,6 +119,8 @@ Day/night, US weather alerts, Earthquakes, Fires & events.
 | Signals | Radio stations | radio-browser.info | Direct | Area; plays https streams only |
 | Signals | Wikipedia nearby | MediaWiki geosearch | Direct | Within 10 km of view centre |
 | Signals | Wildlife sightings | iNaturalist | Direct | Area; last 7 days |
+| (cards) | Plane route and details | adsbdb.com | Direct | On tap only; route data may not be copied into other databases |
+| (cards) | Plane photos | planespotters.net | Direct | On tap only; photographer credit shown with a link |
 
 Not included, and why: ship AIS (aisstream.io forbids browser connections),
 lightning (no permitted keyless source found), FAA TFRs and GOES imagery (could
@@ -133,6 +135,29 @@ layer does one real fetch for central Georgia (about 300 km), whether or not it
 is switched on, and you get back a list of `{ id, name, ok, count, ms, via, error }`.
 It finishes within 60 seconds, draws nothing and changes no settings (it may
 save downloaded data in the cache, as normal use does).
+
+## Using it (v4)
+
+- **The top line answers first:** a headline for where you are (your location
+  if you allowed it, else your first watched place, else the start point) and
+  up to three facts, all from live loaded data. Tap it for "What's here"; touch
+  the map and it shrinks to a pill.
+- **Modes, not switches:** the tiles at the bottom set the whole map in one tap:
+  Around me, Sky, Storm, Hazards, Roads, Night, Everything, My mix. Your last
+  mode is remembered. "All layers" opens the full grouped list; changing a
+  layer by hand turns the mode into "My mix". Edit `js/modes.js` to change what
+  a mode shows.
+- **A calm map:** far out, aircraft are small dots coloured by height (amber
+  low, teal mid, blue high); closer in, the nearest become plane icons with
+  heading; emergency (red) and military (lime) aircraft always stand out with a
+  label. Busy point layers (buoys, gauges, cameras) show only the nearest 120 as
+  small dots when zoomed out.
+- **Cards lead with a sentence:** e.g. "Delta 1432, Atlanta to New York, Boeing
+  737, 34,000 ft, climbing." Route and aircraft come from adsbdb.com (looked up
+  only when you tap; routes can be out of date) and photos from
+  planespotters.net with the photographer credited. An owner is shown only when
+  it is an airline, company or agency, never a private person.
+- The map draws at up to 2x sharpness when still and lighter while moving.
 
 ## Watch, Brief, Remember (the watch service)
 

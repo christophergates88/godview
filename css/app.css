@@ -375,3 +375,90 @@ body.card-open .sheet { transform: translateY(110%); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* =====================================================================
+   v4 visual system: modes, answer-first status, plainer cards, hint.
+   Colour carries meaning: green = all clear, amber = heads-up,
+   red = act now; each mode and layer group has its own hue.
+   ===================================================================== */
+
+/* Modes (bottom row on phones, top of the side panel on desktop) */
+.chips { gap: 8px; padding: 2px 0 10px; }
+.chips-on { display: flex; gap: 8px; }
+.mode {
+  flex: none; width: 82px; height: 72px; border-radius: 16px; border: 1px solid var(--gv-line);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  background: color-mix(in srgb, var(--mode, #8b97a5) 14%, #0c1015); color: var(--mode, var(--gv-text));
+  font-weight: 800; font-size: 12.5px; letter-spacing: 0.01em; position: relative; touch-action: manipulation;
+  transition: transform 0.12s, background 0.15s;
+}
+.mode svg { width: 24px; height: 24px; }
+.mode span { color: var(--gv-text); white-space: nowrap; }
+.mode.on { background: var(--mode); color: #07090c; border-color: transparent; box-shadow: 0 6px 18px color-mix(in srgb, var(--mode) 35%, transparent); }
+.mode.on span { color: #07090c; }
+.mode:active { transform: scale(0.95); }
+.mode.all { --mode: #e8edf2; background: rgba(255,255,255,0.08); }
+.mode.all .n { display: none; }
+.mode.all.bad::after { content: ""; position: absolute; top: 7px; left: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--gv-bad); }
+.sheet.dragging { transition: none; }
+
+/* Answer-first status */
+.status {
+  position: fixed; z-index: 15; top: calc(var(--safe-t) + 62px); left: calc(var(--safe-l) + 10px); right: calc(var(--safe-r) + 10px);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; text-align: left;
+  padding: 12px 14px; border-radius: 16px; border: 1px solid var(--gv-line);
+  background: rgba(10, 14, 19, 0.94); color: var(--gv-text);
+  border-left: 6px solid var(--lvl, var(--gv-good)); box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: max-width 0.25s, padding 0.25s;
+}
+.status[hidden] { display: none; }
+.status[data-level="1"] { --lvl: var(--gv-warn); }
+.status[data-level="2"] { --lvl: var(--gv-bad); }
+.s-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--lvl, var(--gv-good)); flex: none; }
+.status[data-level="2"] .s-dot { animation: pulse 1s infinite; }
+.s-head { font-weight: 850; font-size: 17px; line-height: 1.2; }
+.s-facts { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.s-facts span { font-size: 13.5px; font-weight: 650; padding: 5px 9px; border-radius: 999px; background: rgba(255,255,255,0.08); }
+.status.pill { right: auto; max-width: calc(100% - 20px); padding: 8px 12px; border-radius: 999px; border-left-width: 1px; }
+.status.pill .s-facts { display: none; }
+.status.pill .s-head { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Cards: a sentence first, details second */
+.card h3 { font-size: 22px; }
+.say { margin: 8px 0 2px; font-size: 17px; font-weight: 650; line-height: 1.38; color: var(--gv-text); }
+.rows { font-size: 13px; opacity: 0.92; }
+.credit { font-size: 11px; color: var(--gv-muted); margin-top: 4px; }
+.credit[hidden], .say[hidden] { display: none; }
+.credit a { color: inherit; }
+
+/* Layer groups get their colour */
+.group-head { border-left: 4px solid var(--group, transparent); padding-left: 4px; border-radius: 4px; }
+.group .layer-row .ico { color: var(--group, var(--chip)); background: color-mix(in srgb, var(--group, #8b97a5) 16%, transparent); }
+
+/* First-run hint */
+.hint { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(0,0,0,0.6); padding: 20px; }
+.hint[hidden] { display: none; }
+.hint-card { width: min(380px, 100%); background: var(--gv-panel-solid); border: 1px solid var(--gv-line); border-radius: 20px; padding: 22px; border-top: 4px solid var(--gv-accent); }
+.hint-card h2 { margin: 0 0 10px; font-size: 24px; font-weight: 900; }
+.hint-card ol { margin: 0 0 18px; padding-left: 22px; font-size: 16px; line-height: 1.5; }
+.hint-card li { margin-bottom: 8px; }
+.hint-card .btn { width: 100%; }
+
+/* Phones: hide the technical read-out; the status says what matters */
+@media (max-width: 899px) {
+  html, body { font-size: 16px; }
+  #hud { display: none; }
+}
+/* Landscape phones: keep the map open */
+@media (max-height: 500px) and (orientation: landscape) {
+  .status { top: calc(var(--safe-t) + 60px); right: auto; max-width: 46%; }
+  .sheet { max-height: 86vh; }
+  .mode { width: 74px; height: 60px; }
+}
+@media (min-width: 900px) {
+  .status { left: calc(var(--safe-l) + 372px); right: auto; top: calc(var(--safe-t) + 84px); max-width: 520px; }
+  .sheet .chips { display: flex; flex-wrap: wrap; padding-top: 8px; }
+  .sheet .chips-on { flex-wrap: wrap; }
+  .mode { width: 74px; height: 64px; }
+}

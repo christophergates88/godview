@@ -187,3 +187,39 @@ export const radio = () => ([
 export const wikiGeo = () => ({ batchcomplete: '', query: { geosearch: [{ pageid: 123, ns: 0, title: 'Sampletown, Georgia', lat: 33.3268, lon: -83.3885, dist: 3100.5, primary: '' }] } });
 export const wikiSummary = () => ({ title: 'Sampletown, Georgia', extract: 'Sampletown is a city in Sample County, Georgia (sample text).', thumbnail: { source: 'https://upload.wikimedia.org/sample.jpg' } });
 export const inat = () => ({ total_results: 1, results: [{ id: 999, species_guess: 'Northern Cardinal', taxon: { name: 'Cardinalis cardinalis', preferred_common_name: 'Northern Cardinal', iconic_taxon_name: 'Aves' }, geojson: { type: 'Point', coordinates: [-83.4, 33.3] }, observed_on: '2026-11-10', user: { login: 'sample_user' }, quality_grade: 'research', photos: [{ url: 'https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.jpg' }], uri: 'https://www.inaturalist.org/observations/999' }] });
+
+// ---------------------------------------------------------------- v4: a dense sky (650 aircraft over the Southeast)
+// Deterministic pseudo-random so screenshots are repeatable. readsb (adsb.lol) format.
+export function denseFlights() {
+  let s = 42;
+  const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const ac = [];
+  for (let i = 0; i < 650; i++) {
+    const lat = 30 + rnd() * 6.5; const lon = -88 + rnd() * 10;
+    const alt = rnd() < 0.08 ? 'ground' : Math.round((rnd() < 0.25 ? 1500 + rnd() * 8000 : 18000 + rnd() * 21000) / 100) * 100;
+    const al = ['DAL', 'AAL', 'SWA', 'UAL', 'JBU', 'FFT', 'N'][Math.floor(rnd() * 7)];
+    ac.push({ hex: (0xa00000 + i).toString(16), flight: al === 'N' ? `N${100 + i}X ` : `${al}${100 + Math.floor(rnd() * 3000)} `, lat, lon, alt_baro: alt, alt_geom: typeof alt === 'number' ? alt + 300 : undefined, gs: 120 + rnd() * 380, track: Math.floor(rnd() * 360), baro_rate: Math.round((rnd() - 0.5) * 3000), t: ['B738', 'A321', 'B739', 'E75L', 'C172', 'CRJ9'][Math.floor(rnd() * 6)], seen_pos: rnd() * 5 });
+  }
+  ac[10] = { ...ac[10], squawk: '7700', flight: 'UAL99   ' };
+  ac[20] = { ...ac[20], dbFlags: 1, flight: 'RCH871  ', t: 'C17' };
+  ac[21] = { ...ac[21], dbFlags: 1, flight: 'TOPCAT1 ', t: 'F16' };
+  return { ac, now: Date.now(), total: ac.length };
+}
+
+// adsbdb aircraft + flight route (documented response shape)
+export const adsbdb = (hex, callsign) => ({ response: {
+  aircraft: { type: '737-932ER', icao_type: 'B739', manufacturer: 'Boeing', mode_s: hex.toUpperCase(), registration: 'N123DL', registered_owner_country_iso_name: 'US', registered_owner_country_name: 'United States', registered_owner_operator_flag_code: 'DAL', registered_owner: 'Delta Air Lines Inc', url_photo: null, url_photo_thumbnail: null },
+  ...(callsign ? { flightroute: { callsign, callsign_icao: callsign, callsign_iata: 'DL1234', airline: { name: 'Delta Air Lines', icao: 'DAL', iata: 'DL', country: 'United States', country_iso: 'US', callsign: 'DELTA' },
+    origin: { country_iso_name: 'US', country_name: 'United States', elevation: 1026, iata_code: 'ATL', icao_code: 'KATL', latitude: 33.6367, longitude: -84.4281, municipality: 'Atlanta', name: 'Hartsfield-Jackson Atlanta International Airport' },
+    destination: { country_iso_name: 'US', country_name: 'United States', elevation: 13, iata_code: 'LGA', icao_code: 'KLGA', latitude: 40.7772, longitude: -73.8726, municipality: 'New York', name: 'LaGuardia Airport' } } } : {}),
+} });
+export const adsbdbPrivate = (hex) => ({ response: { aircraft: { type: '172S', icao_type: 'C172', manufacturer: 'Cessna', mode_s: hex.toUpperCase(), registration: 'N100X', registered_owner_country_iso_name: 'US', registered_owner_country_name: 'United States', registered_owner_operator_flag_code: null, registered_owner: 'John Q Sample', url_photo: null, url_photo_thumbnail: null } } });
+export const planespotters = () => ({ photos: [{ id: '1', thumbnail: { src: 'https://t.plnspttrs.net/sample_s.jpg', size: { width: 200, height: 133 } }, thumbnail_large: { src: 'https://t.plnspttrs.net/sample_t.jpg', size: { width: 420, height: 280 } }, link: 'https://www.planespotters.net/photo/1/sample', photographer: 'Sample Photographer' }] });
+
+// 400 buoys (dense point layer)
+export function denseBuoys() {
+  const head = '#STN       LAT      LON  YYYY MM DD hh mm WDIR WSPD   GST WVHT  DPD APD MWD   PRES  PTDY  ATMP  WTMP  DEWP  VIS   TIDE\n#text      deg      deg   yr mo day hr mn degT  m/s   m/s   m   sec sec degT   hPa   hPa  degC  degC  degC  nmi     ft\n';
+  let out = head;
+  for (let i = 0; i < 400; i++) out += `B${String(i).padStart(4, '0')}  ${(28 + (i % 20) * 0.45).toFixed(3)}  ${(-90 + Math.floor(i / 20) * 0.6).toFixed(3)}  2026 11 12 19 50  40  6.0   7.0  1.1    7  5.2  60 1018.4    MM  20.1  21.5  15.0   MM     MM\n`;
+  return out;
+}

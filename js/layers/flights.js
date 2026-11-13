@@ -6,10 +6,14 @@
 // Fix: put a small relay in Settings > Flight relay URL (see README).
 
 import { ENDPOINTS, COLORS } from '../config.js';
+import { aircraftDetails } from './lib/aircraft.js';
 
 const MAX_VIEW_KM = 2500;   // further out than this, we do not query (too big an area)
 const flights = new Map();  // key -> flight
 let billboards = null;
+let dots = null;
+let labels = null;
+let lastLod = '';
 let lastQuery = null;       // { lat, lon, radiusKm, t }
 let preferred = null;       // id of the provider that last worked
 let selectedKey = null;
@@ -84,6 +88,7 @@ export const PROVIDERS = [
           track: a.track ?? a.true_heading,
           vrateMs: (a.baro_rate ?? a.geom_rate) != null ? (a.baro_rate ?? a.geom_rate) * 0.00508 : null,
           squawk: a.squawk,
+          military: (Number(a.dbFlags) & 1) === 1,
           seenAt: now - (a.seen_pos || a.seen || 0) * 1000,
         };
       });
@@ -104,7 +109,10 @@ export default {
   followRange: 40000,
 
   init(ctx) {
-    billboards = ctx.primitives.add(new ctx.Cesium.BillboardCollection());
+    const C = ctx.Cesium;
+    dots = ctx.primitives.add(new C.PointPrimitiveCollection());
+    billboards = ctx.primitives.add(new C.BillboardCollection());
+    labels = ctx.primitives.add(new C.LabelCollection());
   },
 
   async fetch(ctx) {
@@ -147,7 +155,6 @@ export default {
   },
 
   render(ctx, data) {
-    const { Cesium } = ctx;
     const seen = new Set();
     for (const f of data.list) {
       if (!f.key) continue;
@@ -155,30 +162,29 @@ export default {
       let item = flights.get(f.key);
       if (!item) {
         item = { ...f };
-        item.bb = billboards.add({
-          id: { layer: 'flights', key: f.key },
-          image: ctx.globe.makeIcon('plane', COLORS.flights, 32),
-          scale: 0.75,
-          alignedAxis: Cesium.Cartesian3.UNIT_Z,
-          scaleByDistance: new Cesium.NearFarScalar(2e4, 1.1, 3e6, 0.45),
-          disableDepthTestDistance: 60000,
-        });
+        item.bb = billboards.add({ id: { layer: 'flights', key: f.key }, show: false, alignedAxis: ctx.Cesium.Cartesian3.UNIT_Z, disableDepthTestDistance: 60000 });
+        item.pt = dots.add({ id: { layer: 'flights', key: f.key }, pixelSize: 3, show: false });
         flights.set(f.key, item);
       } else Object.assign(item, f);
+      item.special = isSpecial(item);
       item.fetchedAt = Date.now();
       place(ctx, item, Date.now());
     }
     for (const [k, item] of flights) {
-      if (!seen.has(k)) { billboards.remove(item.bb); flights.delete(k); }
+      if (!seen.has(k)) { billboards.remove(item.bb); dots.remove(item.pt); flights.delete(k); }
     }
+    lastLod = '';
+    lod(ctx, true);
+    const sp = [...flights.values()].filter((f) => f.special).length;
+    ctx.setNote([data.provider ? `${data.provider}${ctx.rec.via === 'relay' ? ' via relay' : ''}` : '', 'colour = height: amber low, teal mid, blue high', sp ? `${sp} emergency/military` : ''].filter(Boolean).join(' · '));
     return flights.size;
   },
 
-  // Smooth motion between updates: estimate position from last speed and heading.
+  // Every second: estimated motion between updates, and the zoom-dependent look.
   tick(ctx, now) {
-    if (!ctx.settings.get('smoothMotion') || !flights.size) return false;
-    const t = now.getTime();
-    for (const item of flights.values()) place(ctx, item, t);
+    if (!flights.size) return false;
+    if (ctx.settings.get('smoothMotion')) { const t = now.getTime(); for (const item of flights.values()) place(ctx, item, t); }
+    lod(ctx, false);
     return true;
   },
 
@@ -186,21 +192,17 @@ export default {
     const f = flights.get(key);
     if (!f) return null;
     const fm = ctx.fmt;
+    // The sentence already says who, height and climbing; rows are the extras.
     const rows = [
-      ['Altitude', f.onGround ? 'On ground' : fm.altitude(f.altM)],
       ['Speed', fm.airspeed(f.speedMs)],
       ['Heading', fm.heading(f.track)],
-      ['Climb', fm.verticalRate(f.vrateMs)],
     ];
-    if (f.type || f.desc) rows.push(['Type', [f.type, f.desc].filter(Boolean).join(' · ')]);
-    if (f.reg) rows.push(['Registration', f.reg]);
-    if (f.country) rows.push(['Registered in', f.country]);
-    if (f.squawk) rows.push(['Squawk', String(f.squawk)]);
-    rows.push(['ICAO hex', String(f.key).toUpperCase()]);
-    rows.push(['Last report', fm.ago(f.seenAt) + (ctx.settings.get('smoothMotion') ? ' (position estimated since)' : '')]);
+    if (f.squawk && f.special) rows.push(['Squawk', String(f.squawk)]);
+    rows.push(['Last report', fm.ago(f.seenAt)]);
     return {
       title: f.callsign || String(f.key).toUpperCase(),
-      subtitle: fm.latlon(f.est?.lat ?? f.lat, f.est?.lon ?? f.lon),
+      say: flightSentence(f, null, ctx),
+      subtitle: f.special ? (f.military ? 'Military aircraft' : `Emergency code ${f.squawk}`) : fm.latlon(f.est?.lat ?? f.lat, f.est?.lon ?? f.lon),
       rows,
       link: { href: `https://globe.airplanes.live/?icao=${encodeURIComponent(f.key)}`, text: 'Open in airplanes.live' },
       followable: true,
@@ -209,6 +211,14 @@ export default {
   },
 
   position(ctx, key) { const f = flights.get(key); return f && f.bb ? f.bb.position : undefined; },
+
+  // Route, type, operator and a photo, looked up when the card opens.
+  async details(ctx, key) {
+    const f = flights.get(key);
+    if (!f) return null;
+    const d = await aircraftDetails(ctx, f.key, f.callsign);
+    return { say: flightSentence(f, d, ctx), rows: d.rows, image: d.photo?.src, credit: d.credit, extraLink: d.photo?.link };
+  },
 
   // Reload when the camera moves to a clearly different area.
   onViewChange(ctx, v) {
@@ -224,7 +234,8 @@ export default {
 
   onSelect(ctx, key) {
     selectedKey = key;
-    for (const f of flights.values()) f.bb.color = f.key === selectedKey ? ctx.Cesium.Color.WHITE : ctx.Cesium.Color.WHITE.withAlpha(f.onGround ? 0.55 : 1);
+    lastLod = '';
+    lod(ctx, true);
   },
 };
 
@@ -239,7 +250,88 @@ function place(ctx, item, t) {
     lon += (d * Math.sin(brg)) / (111320 * Math.max(0.01, Math.cos(lat * Math.PI / 180)));
   }
   item.est = { lat, lon };
-  item.bb.position = ctx.Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+  const pos = ctx.Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+  item.bb.position = pos;
+  item.pt.position = pos;
   item.bb.rotation = -((item.track || 0) * Math.PI / 180);
-  if (item.onGround) item.bb.color = ctx.Cesium.Color.WHITE.withAlpha(0.55);
+}
+
+// ---- Look by zoom ("level of detail") -------------------------------------
+// Far out: small quiet dots. Closer: plane icons with heading for the nearest
+// ones. Emergency and military aircraft always stand out. Colour = height.
+const ALT = { ground: '#8b97a5', low: '#ffb020', mid: '#3ee6c4', high: '#6fb7ff', emergency: '#ff2d55', military: '#c6ff4a' };
+const isSpecial = (f) => ['7500', '7600', '7700'].includes(String(f.squawk)) || !!f.military;
+function band(f) {
+  if (f.squawk && ['7500', '7600', '7700'].includes(String(f.squawk))) return 'emergency';
+  if (f.military) return 'military';
+  if (f.onGround) return 'ground';
+  const ft = (f.altM || 0) * 3.28084;
+  return ft < 10000 ? 'low' : ft < 25000 ? 'mid' : 'high';
+}
+export function lodPlan(heightKm) {
+  if (heightKm > 900) return { icons: 0, scale: 0.5, dot: 3, alpha: 0.55 };
+  if (heightKm > 250) return { icons: 40, scale: 0.55, dot: 3.5, alpha: 0.7 };
+  if (heightKm > 60) return { icons: 150, scale: 0.68, dot: 4, alpha: 0.8 };
+  return { icons: 400, scale: 0.85, dot: 4, alpha: 0.9 };
+}
+function lod(ctx, force) {
+  if (!billboards || !flights.size) return;
+  const C = ctx.Cesium;
+  const v = ctx.view();
+  const key = `${Math.round(v.heightKm / 10)}|${v.lat.toFixed(1)}|${v.lon.toFixed(1)}|${selectedKey}|${flights.size}`;
+  if (!force && key === lastLod) return;
+  lastLod = key;
+  const plan = lodPlan(v.heightKm);
+  const list = [...flights.values()];
+  const cosl = Math.cos(v.lat * Math.PI / 180);
+  const d2 = (f) => ((f.est?.lat ?? f.lat) - v.lat) ** 2 + (((f.est?.lon ?? f.lon) - v.lon) * cosl) ** 2;
+  const ranked = list.filter((f) => !f.special && !(f.onGround && v.heightKm > 60)).sort((a, b) => d2(a) - d2(b));
+  const iconSet = new Set(ranked.slice(0, plan.icons).map((f) => f.key));
+  labels.removeAll();
+  for (const f of list) {
+    const b = band(f);
+    const sel = f.key === selectedKey;
+    const icon = f.special || sel || iconSet.has(f.key);
+    f.bb.show = icon;
+    f.pt.show = !icon;
+    if (icon) {
+      f.bb.image = ctx.globe.makeIcon('plane', ALT[b], 32);
+      f.bb.scale = sel ? 1.0 : f.special ? Math.max(0.8, plan.scale + 0.25) : plan.scale;
+      f.bb.color = C.Color.WHITE.withAlpha(b === 'ground' ? 0.7 : 1);
+    } else {
+      f.pt.color = C.Color.fromCssColorString(ALT[b]).withAlpha(plan.alpha);
+      f.pt.pixelSize = plan.dot;
+      f.pt.outlineWidth = 0;
+    }
+    if (sel || (f.special && v.heightKm < 1500)) {
+      labels.add({
+        position: f.bb.position, text: `${f.callsign || f.key.toUpperCase()}${f.onGround ? '' : ' · ' + ctx.fmt.altitude(f.altM)}`,
+        font: '700 13px -apple-system, Segoe UI, sans-serif', fillColor: C.Color.WHITE, outlineColor: C.Color.BLACK, outlineWidth: 3,
+        style: C.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new C.Cartesian2(14, -14), disableDepthTestDistance: 60000,
+        showBackground: false,
+      });
+    }
+  }
+}
+
+// ---- Plain sentence ---------------------------------------------------------
+const AIRLINE_SHORT = (n) => String(n || '').replace(/\b(Air ?Lines|Airlines|Airways|Air Line|Inc\.?|Corp\.?|Company|Co\.?)\b/gi, '').replace(/\s+/g, ' ').trim();
+export function flightSentence(f, d, ctx) {
+  const parts = [];
+  const num = (f.callsign || '').replace(/^[A-Z]{3}/, '');
+  const who = d?.airline ? `${AIRLINE_SHORT(d.airline)} ${num || f.callsign}` : (f.callsign || `Aircraft ${String(f.key).toUpperCase()}`);
+  parts.push(who.trim());
+  if (d?.from && d?.to) parts.push(`${d.from} to ${d.to}`);
+  const type = d?.type || f.desc || f.type;
+  if (type) parts.push(type);
+  if (f.onGround) parts.push('on the ground');
+  else {
+    const ft = Math.round(((f.altM || 0) * 3.28084) / 500) * 500;
+    parts.push(ctx.settings.get('units') === 'imperial' ? `${ft.toLocaleString()} ft` : `${Math.round((f.altM || 0) / 50) * 50} m`);
+    const fpm = (f.vrateMs || 0) * 196.85;
+    parts.push(fpm > 300 ? 'climbing' : fpm < -300 ? 'descending' : 'level');
+  }
+  let s = parts.join(', ') + '.';
+  if (f.special) s = (f.military ? 'Military. ' : `Emergency code ${f.squawk}. `) + s;
+  return s;
 }

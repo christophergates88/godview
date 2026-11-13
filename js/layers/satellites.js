@@ -37,6 +37,7 @@ export function makeSatelliteLayer({ id, group, name, label, color = COLORS.sate
   const sats = [];
   const byKey = new Map();
   let tickN = 0;
+  let passCache = { key: '', t: 0, v: null };
 
   const layer = {
     id,
@@ -97,7 +98,7 @@ export function makeSatelliteLayer({ id, group, name, label, color = COLORS.sate
         const point = points.add({
           id: { layer: id, key },
           pixelSize: station ? 9 : (list.length > 2000 ? 3 : 5),
-          color: Cesium.Color.fromCssColorString(station ? COLORS.stations : color),
+          color: Cesium.Color.fromCssColorString(station ? COLORS.stations : color).withAlpha(list.length > 2000 ? 0.55 : 1),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: list.length > 2000 ? 0 : 1,
           show: false,
@@ -146,6 +147,7 @@ export function makeSatelliteLayer({ id, group, name, label, color = COLORS.sate
       const mm = Number(s.omm.MEAN_MOTION);
       const epoch = Date.parse(s.omm.EPOCH + (String(s.omm.EPOCH).endsWith('Z') ? '' : 'Z'));
       return {
+        say: `${s.name}, ${geo ? f.distanceKm(geo.h) + ' up' : 'in orbit'}, moving ${f.speedKmS(s.vel)}. ${mm ? `Circles Earth every ${(1440 / mm).toFixed(0)} minutes.` : ''}`.trim(),
         title: s.name,
         subtitle: `NORAD ${s.key}${s.omm.OBJECT_ID ? ' · ' + s.omm.OBJECT_ID : ''}`,
         rows: [
@@ -175,25 +177,36 @@ export function makeSatelliteLayer({ id, group, name, label, color = COLORS.sate
       up.sort((a, b) => b[0] - a[0]);
       const lines = [];
       if (up.length) lines.push(`${name}: ${up.length} above 10° now: ${up.slice(0, 3).map(([el, s]) => `${s.name} (${Math.round(el)}°)`).join(', ')}${up.length > 3 ? '…' : ''}`);
-      if (passes && sats.length <= 400) {
-        // Next pass above 10° within 12 h for up to 60 objects (stations first).
-        const cands = [...sats].sort((a, b) => Number(isStation(b.name)) - Number(isStation(a.name))).slice(0, 60);
-        let best = null;
-        const t0 = Date.now();
-        for (let t = 60e3; t <= 12 * 3600e3 && !best; t += 60e3) {
-          const d = new Date(t0 + t);
-          const gmst = sat.gstime(d);
-          for (const s of cands) {
-            let pv;
-            try { pv = sat.propagate(s.satrec, d); } catch { pv = null; }
-            if (!pv || !pv.position) continue;
-            const el = elevation(sat, obs, sat.eciToEcf(pv.position, gmst));
-            if (el > 10 && !up.some(([, u]) => u === s)) { best = { s, d }; break; }
-          }
-        }
-        if (best) lines.push(`Next pass above 10°: ${best.s.name} at ${best.d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} (not checked for sunlight/visibility)`);
+      if (passes) {
+        const best = this.nextPass(pt, up.map(([, u]) => u));
+        if (best) lines.push(`Next pass above 10°: ${best.name} at ${best.time} (not checked for sunlight/visibility)`);
       }
       return lines;
+    },
+
+    // Next pass above 10° within 12 h (stations first). Cached 10 minutes per spot.
+    nextPass(pt, exclude = []) {
+      if (!passes || !sat || !sats.length || sats.length > 400) return null;
+      const ck = `${pt.lat.toFixed(1)},${pt.lon.toFixed(1)}`;
+      if (passCache.key === ck && Date.now() - passCache.t < 600000) return passCache.v;
+      const obs = { latitude: sat.degreesToRadians(pt.lat), longitude: sat.degreesToRadians(pt.lon), height: 0.1 };
+      const cands = [...sats].sort((a, b) => Number(isStation(b.name)) - Number(isStation(a.name))).slice(0, 60);
+      let best = null;
+      const t0 = Date.now();
+      for (let t = 60e3; t <= 12 * 3600e3 && !best; t += 60e3) {
+        const d = new Date(t0 + t);
+        const gmst = sat.gstime(d);
+        for (const s of cands) {
+          if (exclude.includes(s)) continue;
+          let pv;
+          try { pv = sat.propagate(s.satrec, d); } catch { pv = null; }
+          if (!pv || !pv.position) continue;
+          if (elevation(sat, obs, sat.eciToEcf(pv.position, gmst)) > 10) { best = { s, d }; break; }
+        }
+      }
+      const v = best ? { name: best.s.name, short: isStation(best.s.name) ? (/TIANGONG|CSS|TIANHE/i.test(best.s.name) ? 'Tiangong' : 'Space Station') : best.s.name, time: best.d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), at: best.d.getTime() } : null;
+      passCache = { key: ck, t: Date.now(), v };
+      return v;
     },
 
     // Draw the path for the next orbit of the tapped satellite.

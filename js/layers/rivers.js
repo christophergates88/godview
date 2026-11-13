@@ -28,6 +28,7 @@ export default makePointLayer({
     return {
       key: g.lid, lat: Number(g.latitude), lon: Number(g.longitude), color: c[1],
       title: g.name || g.lid,
+      say: `${g.name || g.lid} is ${obs.primary != null && obs.primary > -999 ? `at ${obs.primary} ${obs.primaryUnit || ''}`.trim() : 'reporting'}: ${c[0].toLowerCase()}.${fc.floodCategory && fc.floodCategory !== obs.floodCategory && CAT[fc.floodCategory] ? ` Forecast: ${CAT[fc.floodCategory][0].toLowerCase()}.` : ''}`,
       subtitle: c[0],
       rows: [
         ['Observed', obs.primary != null && obs.primary > -999 ? `${obs.primary} ${obs.primaryUnit || ''}` : '—'],

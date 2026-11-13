@@ -79,7 +79,9 @@ export default {
     if (q.alert) rows.push(['PAGER alert', q.alert]);
     if (q.tsunami) rows.push(['Tsunami', 'Flag set (check official sources)']);
     rows.push(['Status', q.status || '—']);
+    const strength = q.mag >= 6 ? 'A strong' : q.mag >= 4.5 ? 'A moderate' : q.mag >= 3 ? 'A light' : 'A small';
     return {
+      say: `${strength} magnitude ${q.mag != null ? q.mag.toFixed(1) : '?'} quake ${q.place || ''}, ${f.ago(q.time)}, ${f.depthKm(q.depth)} deep.${q.tsunami ? ' Tsunami flag set: check official sources.' : ''}`.replace(' ,', ','),
       title: `M${q.mag != null ? q.mag.toFixed(1) : '?'} earthquake`,
       subtitle: q.place || '',
       rows,

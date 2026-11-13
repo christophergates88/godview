@@ -26,6 +26,7 @@ function write(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; }
 }
 
+export const firstRun = read(KEY) == null;
 let state = merge(defaults(), read(KEY) || {});
 const listeners = new Set();
 

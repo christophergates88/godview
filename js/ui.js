@@ -8,6 +8,9 @@ import { fetchJSON, fillUrl, cache } from './core/net.js';
 import * as globe from './globe.js';
 import { buildBrief } from './brief.js';
 import * as watch from './watch.js';
+import { MODES, GROUP_COLORS, applyMode } from './modes.js';
+import { initStatus } from './status.js';
+import { initHint } from './hint.js';
 
 const $ = (id) => document.getElementById(id);
 const Cesium = () => window.Cesium;
@@ -28,6 +31,8 @@ export function initUI(opts) {
   initBrief();
   initSettings();
   initHud();
+  initStatus({ manager: M, layers: LAYERS, open: (lat, lon, label) => openBrief(lat, lon, label === 'Here' ? 'Where you are' : label) });
+  initHint();
   watch.initWatch({ toast });
   globe.onTap(onTap);
   M.onStatus((id) => {
@@ -80,7 +85,9 @@ function buildSheet() {
       sec.querySelector('.group-toggle').setAttribute('aria-expanded', String(open));
       setGroupOpen(g.id, open);
     });
+    sec.style.setProperty('--group', GROUP_COLORS[g.id] || '#8b97a5');
     sec.querySelectorAll('.g-all').forEach((b) => b.addEventListener('click', () => {
+      setTimeout(toCustom, members.length * 260);
       const on = b.dataset.on === '1';
       // Turn on in a staggered way so a whole group does not fetch at once.
       members.forEach((L, i) => {
@@ -102,7 +109,7 @@ function buildSheet() {
           <div class="stat"></div>
         </div>
         <label class="switch" aria-label="${escapeHtml(L.name)}"><input type="checkbox"><span></span></label>`;
-      row.querySelector('input').addEventListener('change', (e) => M.enable(L.id, e.target.checked));
+      row.querySelector('input').addEventListener('change', (e) => { M.enable(L.id, e.target.checked); toCustom(); });
       body.appendChild(row);
       updateLayer(L.id);
     }
@@ -131,49 +138,73 @@ function buildSheet() {
   const setState = (s) => { sheet.dataset.state = s; };
   handle.addEventListener('click', () => setState(sheet.dataset.state === 'open' ? 'peek' : 'open'));
   $('chip-all').addEventListener('click', () => setState(sheet.dataset.state === 'open' ? 'peek' : 'open'));
-  let y0 = null;
-  for (const elx of [handle, $('chips')]) {
-    elx.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true });
-    elx.addEventListener('touchend', (e) => {
-      if (y0 == null) return;
-      const dy = e.changedTouches[0].clientY - y0; y0 = null;
-      if (dy < -25) setState('open'); else if (dy > 25) setState('peek');
-    });
-  }
+  // Drag the handle: the sheet follows your finger, then snaps open or closed.
+  let y0 = null; let t0 = 0;
+  handle.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; t0 = Date.now(); sheet.classList.add('dragging'); }, { passive: true });
+  handle.addEventListener('touchmove', (e) => {
+    if (y0 == null) return;
+    const dy = e.touches[0].clientY - y0;
+    sheet.style.transform = `translateY(${sheet.dataset.state === 'open' ? Math.max(0, dy) : Math.min(0, dy) * 0.25}px)`;
+  }, { passive: true });
+  handle.addEventListener('touchend', (e) => {
+    if (y0 == null) return;
+    const dy = e.changedTouches[0].clientY - y0; const v = dy / Math.max(1, Date.now() - t0);
+    y0 = null; sheet.classList.remove('dragging'); sheet.style.transform = '';
+    if (dy < -25 || v < -0.4) setState('open'); else if (dy > 60 || v > 0.4) setState('peek');
+  });
+  $('chips').addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; t0 = Date.now(); }, { passive: true });
+  $('chips').addEventListener('touchend', (e) => {
+    if (y0 == null) return;
+    const dy = e.changedTouches[0].clientY - y0; y0 = null;
+    if (dy < -40) setState('open'); else if (dy > 40) setState('peek');
+  });
+  buildModes();
   updateChips();
 }
 
-// Chips show only the layers that are on (tap to turn off), after a "Layers" chip.
-function updateChips() {
+// ---------------------------------------------------------------- modes
+function buildModes() {
   const box = $('chips-on');
-  if (!box) return;
+  box.innerHTML = '';
+  for (const m of MODES) {
+    const b = document.createElement('button');
+    b.className = 'mode';
+    b.id = 'mode-' + m.id;
+    b.style.setProperty('--mode', m.color);
+    b.innerHTML = `${m.icon}<span>${escapeHtml(m.name)}</span>`;
+    b.addEventListener('click', () => {
+      const mode = applyMode(M, LAYERS, settings, apiKeys, m.id);
+      markMode();
+      if (mode.fly) {
+        // "Around me": go to where you are (or your first place / start).
+        const s = settings.get('start');
+        navigator.permissions?.query({ name: 'geolocation' }).then((p) => {
+          if (p.state === 'granted') locate((la, lo) => globe.flyTo(la, lo, 220)); else globe.flyTo(Number(s.lat), Number(s.lon), 300);
+        }).catch(() => globe.flyTo(Number(s.lat), Number(s.lon), 300));
+      }
+      toast(`${mode.name}`, 1500);
+    });
+    box.appendChild(b);
+  }
+  markMode();
+  settings.onChange((k) => { if (k === 'mode' || k === '*') markMode(); });
+}
+function markMode() {
+  const cur = settings.get('mode') || 'custom';
+  for (const m of MODES) $('mode-' + m.id)?.classList.toggle('on', m.id === cur);
+}
+// A hand-made change turns the mode into "My mix" and remembers it.
+function toCustom() {
+  settings.set('customEnabled', { ...settings.get('enabled') });
+  if (settings.get('mode') !== 'custom') { settings.set('mode', 'custom'); markMode(); }
+}
+
+// The "All layers" tile shows how many are on and flags problems.
+function updateChips() {
   const on = LAYERS.filter((L) => M.state[L.id].enabled);
-  const want = on.map((L) => L.id).join(',');
-  if (box.dataset.ids !== want) {
-    box.dataset.ids = want;
-    box.innerHTML = '';
-    for (const L of on) {
-      const chip = document.createElement('button');
-      chip.className = 'chip on';
-      chip.id = 'chip-' + L.id;
-      chip.style.setProperty('--chip', L.color);
-      chip.title = `Turn off ${L.name}`;
-      chip.innerHTML = `${L.icon}<span>${escapeHtml(shortName(L.name))}</span><span class="n"></span><i class="dot"></i>`;
-      chip.addEventListener('click', () => M.enable(L.id, false));
-      box.appendChild(chip);
-    }
-  }
-  for (const L of on) {
-    const st = M.state[L.id];
-    const chip = $('chip-' + L.id);
-    if (!chip) continue;
-    const bad = st.status === 'error' || st.status === 'limited' || st.status === 'needs-key';
-    chip.querySelector('.n').textContent = bad ? '!' : (st.count != null ? compact(st.count) : '');
-    const d = chip.querySelector('.dot');
-    d.className = 'dot ' + (st.status === 'needs-key' ? 'limited' : st.status);
-    d.style.display = bad ? '' : 'none';
-  }
+  const bad = on.some((L) => ['error', 'limited', 'needs-key'].includes(M.state[L.id].status));
   $('chip-all-n').textContent = `${on.length}/${LAYERS.length}`;
+  $('chip-all').classList.toggle('bad', bad);
 }
 const shortName = (n) => n.replace(/^Satellites: /, 'Sats: ').replace(/ \(.*\)$/, '');
 
@@ -327,12 +358,14 @@ export function closeCard() {
   document.body.classList.remove('card-open');
 }
 
-function fillCard({ kicker, title, subtitle, rows, text, link, accent, image }) {
+function fillCard({ kicker, title, subtitle, rows, text, link, accent, image, say, credit }) {
   const card = $('card');
   card.classList.remove('brief');
   card.style.setProperty('--card-accent', accent || 'var(--gv-accent)');
   $('card-kicker').textContent = kicker || '';
   $('card-title').textContent = title || '';
+  setSay(say);
+  setCredit(credit);
   $('card-sub').textContent = subtitle || '';
   setRows(rows);
   setText(text);
@@ -343,6 +376,12 @@ function fillCard({ kicker, title, subtitle, rows, text, link, accent, image }) 
   $('card-fly').hidden = false;
 }
 
+function setSay(t) { const e = $('card-say'); e.hidden = !t; e.textContent = t || ''; }
+function setCredit(t, href) {
+  const e = $('card-credit');
+  e.hidden = !t;
+  e.innerHTML = !t ? '' : (href && /^https:\/\//.test(href) ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(t)}</a>` : escapeHtml(t));
+}
 function setText(text) { const t = $('card-text'); t.hidden = !text; t.textContent = text || ''; }
 function setImage(src) {
   const img = $('card-img');
@@ -380,8 +419,9 @@ function openItem(layerId, key, d) {
     M.details(layerId, key).then((x) => {
       if (current !== mine) return;
       setRows(d.rows);
+      if (current) current.extraRows = Array.isArray(x) ? x : (x?.rows || []);
       if (Array.isArray(x)) addRows(x);
-      else if (x) { if (x.rows) addRows(x.rows); if (x.text) setText(x.text); if (x.image) setImage(x.image); }
+      else if (x) { if (x.say) setSay(x.say); if (x.rows) addRows(x.rows); if (x.text) setText(x.text); if (x.credit) setCredit(x.credit, x.extraLink); if (x.image) setImage(x.image); }
     }).catch((e) => { if (current === mine) { setRows(d.rows); addRows([['Details', `Not available (${e.message})`]]); } });
   }
 }
@@ -397,6 +437,7 @@ function cardTick() {
   }
   $('card-sub').textContent = d.subtitle || '';
   setRows(d.rows);
+  if (current.extraRows) addRows(current.extraRows);
 }
 
 // Tapping bare globe: show the spot and the weather there (Open-Meteo).

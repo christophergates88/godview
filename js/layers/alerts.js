@@ -93,7 +93,9 @@ export default {
       ['Area', a.areaDesc || '—'],
       ['Issued by', a.senderName || '—'],
     ];
+    const until = a.ends || a.expires;
     return {
+      say: `${a.event || 'Weather alert'}${until ? ` until ${new Date(until).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : ''}${a.areaDesc ? ` for ${a.areaDesc.split(';').slice(0, 3).join(',')}${a.areaDesc.split(';').length > 3 ? ' and more' : ''}` : ''}.`,
       title: a.event || 'Weather alert',
       subtitle: a.headline || '',
       rows,

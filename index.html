@@ -41,16 +41,17 @@
   </header>
 
   <div id="hud" aria-live="off"></div>
+  <button id="status" class="status" hidden aria-live="polite"></button>
 
   <!-- Layer controls: bottom sheet on phones, side panel on desktop -->
   <section id="sheet" class="sheet" data-state="peek" aria-label="Layers">
     <button class="sheet-handle" id="sheet-handle" aria-label="Show or hide layer details"><span></span></button>
     <div id="chips" class="chips">
-      <button id="chip-all" class="chip all" aria-label="Show all layers">
-        <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
-        <span>Layers</span><span class="n" id="chip-all-n"></span>
+      <div id="chips-on" class="chips-on" role="group" aria-label="Modes"></div>
+      <button id="chip-all" class="mode all" aria-label="All layers">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span>All layers</span><span class="n" id="chip-all-n"></span>
       </button>
-      <div id="chips-on" class="chips-on"></div>
     </div>
     <div class="sheet-body">
       <input id="layer-filter" class="filter" type="search" placeholder="Filter layers (e.g. fire, camera, Georgia)" aria-label="Filter layers">
@@ -70,6 +71,7 @@
       <div class="card-titles">
         <div id="card-kicker" class="kicker"></div>
         <h3 id="card-title"></h3>
+        <p id="card-say" class="say" hidden></p>
         <div id="card-sub" class="sub"></div>
       </div>
       <button id="card-close" class="icon-btn small" aria-label="Close">
@@ -77,6 +79,7 @@
       </button>
     </div>
     <img id="card-img" class="card-img" alt="" hidden>
+    <div id="card-credit" class="credit" hidden></div>
     <dl id="card-rows" class="rows"></dl>
     <div id="card-brief" class="card-brief"></div>
     <p id="card-text" class="card-text" hidden></p>
@@ -117,6 +120,18 @@
       <div id="settings-body" class="modal-body"></div>
     </div>
   </section>
+
+  <div id="hint" class="hint" hidden role="dialog" aria-label="How GodView works">
+    <div class="hint-card">
+      <h2>Three taps</h2>
+      <ol>
+        <li><b>Pick a mode</b> at the bottom: Around me, Sky, Storm…</li>
+        <li><b>Tap anything</b> on the map for the story behind it.</li>
+        <li><b>Tap the bell</b> for your places, alerts and morning brief.</li>
+      </ol>
+      <button id="hint-ok" class="btn primary">Got it</button>
+    </div>
+  </div>
 
   <div id="toast" role="status" hidden></div>
   <div id="boot" class="boot">GODVIEW <span>starting…</span></div>

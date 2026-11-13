@@ -2,7 +2,8 @@
 import { ENDPOINTS } from '../config.js';
 import { makePointLayer } from './lib/point-layer.js';
 import { ICONS } from './lib/icons.js';
-import { PROVIDERS } from './flights.js';
+import { PROVIDERS, flightSentence } from './flights.js';
+import { aircraftDetails } from './lib/aircraft.js';
 
 const readsb = PROVIDERS.find((p) => p.id === 'airplaneslive');
 
@@ -20,6 +21,8 @@ export default makePointLayer({
   parse: (raw, ctx) => readsb.parse(raw).map((f) => ({
     key: f.key, lat: f.lat, lon: f.lon, alt: f.onGround ? 30 : Math.max(50, f.altM || 0), rotation: f.track || 0,
     title: f.callsign || String(f.key).toUpperCase(),
+    say: flightSentence({ ...f, military: true, special: true }, null, ctx),
+    _f: { ...f, military: true, special: true },
     subtitle: [f.type, f.desc].filter(Boolean).join(' · ') || 'Military-tagged aircraft',
     rows: [
       ['Altitude', f.onGround ? 'On ground' : ctx.fmt.altitude(f.altM)],
@@ -32,4 +35,8 @@ export default makePointLayer({
     link: { href: `https://globe.adsb.lol/?icao=${encodeURIComponent(f.key)}`, text: 'Open in adsb.lol' },
   })),
   note: () => 'Worldwide, as tagged by adsb.lol',
+  async details(it, ctx) {
+    const d = await aircraftDetails(ctx, it.key, it._f.callsign);
+    return { say: flightSentence(it._f, d, ctx), rows: d.rows, image: d.photo?.src, credit: d.credit };
+  },
 });

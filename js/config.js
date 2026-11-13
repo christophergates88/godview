@@ -236,3 +236,12 @@ export const COLORS = {
   event: '#c8a2ff',
   me: '#3ee6c4',
 };
+
+// Aircraft details shown when you tap a plane (v4). Both allow direct browser
+// access (CORS tested). adsbdb route data may not be copied into other
+// databases, so it is only looked up on tap and kept in memory.
+export const AIRCRAFT_INFO = {
+  adsbdb: 'https://api.adsbdb.com/v0/aircraft/{hex}?callsign={callsign}',
+  adsbdbCallsign: 'https://api.adsbdb.com/v0/callsign/{callsign}',
+  photo: 'https://api.planespotters.net/pub/photos/hex/{hex}',
+};

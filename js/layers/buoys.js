@@ -32,6 +32,7 @@ export default makePointLayer({
       out.push({
         key: c[0], lat, lon,
         title: `Buoy / station ${c[0]}`,
+        say: [g('WSPD') != null ? `Wind ${f.windKmh(g('WSPD') * 3.6)}${g('WDIR') != null ? ' from the ' + f.heading(g('WDIR')).split(' ')[1] : ''}` : '', g('WVHT') != null ? `waves ${ctx.settings.get('units') === 'imperial' ? (g('WVHT') * 3.28084).toFixed(1) + ' ft' : g('WVHT').toFixed(1) + ' m'}` : '', g('WTMP') != null ? `water ${f.tempC(g('WTMP'))}` : ''].filter(Boolean).join(', ').replace(/^./, (x) => x.toUpperCase()) + '.',
         subtitle: `Observed ${f.ago(time)}`,
         rows: [
           ['Wind', g('WSPD') != null ? `${f.windKmh(g('WSPD') * 3.6)}${g('WDIR') != null ? ' from ' + f.heading(g('WDIR')) : ''}` : '—'],

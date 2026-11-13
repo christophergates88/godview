@@ -38,6 +38,7 @@ export default makePointLayer({
       out.push({
         key: l.id, lat, lon,
         title: l.name,
+        say: `${l.name.split('|')[0].trim()} ${Number.isFinite(net) && net > Date.now() ? `launches ${(net - Date.now()) < 48 * 3600e3 ? 'in ' + Math.max(1, Math.round((net - Date.now()) / 3.6e6)) + ' hours' : 'on ' + new Date(net).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}` : 'launch time not set'} from ${pad.location?.name || pad.name || 'its pad'}${l.mission?.name ? `, carrying ${l.mission.name}` : ''}.`,
         subtitle: `${Number.isFinite(net) ? ctx.fmt.time(net) : 'Date TBD'} · ${l.status?.name || ''}`,
         rows: [
           ['When (NET)', Number.isFinite(net) ? `${ctx.fmt.time(net)}${net > Date.now() ? '' : ' (past)'}` : '—'],

@@ -8,181 +8,7 @@
 // Run:  cd test && npm install && node run.mjs
 // Env:  GV_NODE_MODULES=/path/to/node_modules   CHROME=/path/to/chrome
 
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-import * as F from './fixtures.mjs';
-import * as W from '../server/watch/worker.js';
-import { KV as WatchKV, makeFetch as watchFetch } from '../server/watch/test/mocks.mjs';
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const appRoot = path.resolve(here, '..');
-const NM = process.env.GV_NODE_MODULES || path.join(here, 'node_modules');
-const require = createRequire(NM + '/');
-const { chromium } = require('playwright-core');
-const CHROME = process.env.CHROME || '/usr/bin/google-chrome';
-const outDir = path.join(here, 'out');
-fs.mkdirSync(outDir, { recursive: true });
-
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.wasm': 'application/wasm', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg' };
-
-// Serve the app under a sub-path, like GitHub Pages does (/godview/).
-const server = http.createServer((req, res) => {
-  const u = new URL(req.url, 'http://x');
-  if (!u.pathname.startsWith('/godview/')) { res.writeHead(404); return res.end(); }
-  let p = path.join(appRoot, decodeURIComponent(u.pathname.slice('/godview/'.length)) || 'index.html');
-  if (p.endsWith(path.sep) || p === appRoot) p = path.join(appRoot, 'index.html');
-  fs.readFile(p, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('nf'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream' });
-    res.end(data);
-  });
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const BASE = `http://127.0.0.1:${server.address().port}/godview/`;
-
-// 1x1-ish PNG tile (solid dark blue) for every map tile request.
-const TILE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk4P9fDwAD/AH+fW8VmQAAAABJRU5ErkJggg==', 'base64');
-
-const results = [];
-const check = (name, ok, extra = '') => { results.push({ name, ok, extra }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  — ' + extra : ''}`); };
-
-// What each data host answers in the tests (sample data, see fixtures.mjs).
-const WATCH_HOST = 'godview-watch.testsub.workers.dev';
-const RELAY_ONLY = new Set(['api.adsb.lol', 'opensky-network.org', 'api.airplanes.live', 'opendata.adsb.fi', 'nasstatus.faa.gov', 'www.ndbc.noaa.gov', 'www.nhc.noaa.gov', 'droughtmonitor.unl.edu', 'www.submarinecablemap.com', '511ga.org']);
-function answer(u, mode) {
-  const host = u.hostname; const p = u.pathname;
-  const J = (obj, status = 200) => ({ status, type: 'application/json', body: JSON.stringify(obj) });
-  const T = (text, type = 'text/plain') => ({ status: 200, type, body: text });
-  switch (host) {
-    case 'earthquake.usgs.gov': return mode.quakesFail ? J({ error: 'x' }, 500) : J(F.usgs());
-    case 'celestrak.org': return J(F.celestrak());
-    case 'eonet.gsfc.nasa.gov': return J(F.eonet());
-    case 'api.weather.gov': return J(F.nws());
-    case 'api.rainviewer.com': return J(F.rainviewer());
-    case 'api.open-meteo.com': {
-      const n = (u.searchParams.get('latitude') || '').split(',').length;
-      return J(n > 1 ? F.openMeteoGrid(n) : F.openMeteo());
-    }
-    case 'air-quality-api.open-meteo.com': return J(F.openMeteoGrid((u.searchParams.get('latitude') || '').split(',').length));
-    case 'geocoding-api.open-meteo.com': return J(u.searchParams.get('name') === 'zzzz' ? {} : F.geocode());
-    case 'nominatim.openstreetmap.org': return J(F.nominatim());
-    case 'api.adsb.lol':
-      if (mode.flightsBlocked) return 'abort';
-      if (p === '/v2/mil') return J(F.adsbMil());
-      if (p.startsWith('/v2/sqk/')) return J(F.adsbSqk(p.split('/').pop()));
-      return J(F.airplaneslive());
-    case 'opensky-network.org': return mode.flightsBlocked ? 'abort' : J(F.opensky());
-    case 'api.airplanes.live': return mode.flightsBlocked ? 'abort' : J(F.airplaneslive());
-    case 'nasstatus.faa.gov': return T(F.faa(), 'application/xml');
-    case 'll.thespacedevs.com': return J(F.launches());
-    case 'services.swpc.noaa.gov': return J(/ovation/.test(p) ? F.ovation() : F.kp());
-    case 'api.tidesandcurrents.noaa.gov':
-      if (/mdapi/.test(p)) return J(F.tideStations());
-      return J(u.searchParams.get('product') === 'predictions' ? F.tidePred() : F.tideWL());
-    case 'www.ndbc.noaa.gov': return T(F.ndbc());
-    case 'www.spc.noaa.gov': return /csv$/.test(p) ? T(F.spcCsv(), 'text/csv') : J(F.spcOutlook());
-    case 'www.nhc.noaa.gov': return J(F.nhc());
-    case 'services3.arcgis.com': return J(/Perimeters/.test(p) ? F.perimeters() : F.incidents());
-    case 'firms.modaps.eosdis.nasa.gov': return T(F.firmsCsv(), 'text/csv');
-    case 'volcanoes.usgs.gov': return J(F.volcanoes());
-    case 'api.water.noaa.gov': return J(F.gauges());
-    case 'droughtmonitor.unl.edu': return J(F.drought());
-    case '511ga.org':
-      if (/cameras/.test(p)) return u.searchParams.get('key') ? J(F.ga511Cams()) : J({ error: 'key' }, 401);
-      if (/event/.test(p)) return J(F.ga511Events());
-      return { status: 200, type: 'image/png', body: TILE };
-    case 'cwwp2.dot.ca.gov': return J(F.caltrans());
-    case 'api-v3.amtraker.com': return J(F.amtrak());
-    case 'overpass-api.de': return J(F.overpass(u.searchParams.get('data') || ''));
-    case 'www.submarinecablemap.com': return J(F.cables());
-    case 'de1.api.radio-browser.info': return J(F.radio());
-    case 'en.wikipedia.org': return J(/summary/.test(p) ? F.wikiSummary() : F.wikiGeo());
-    case 'api.inaturalist.org': return J(F.inat());
-    default:
-      if (/^gbfs\./.test(host)) return J(/status/.test(p) ? F.gbfsStatus() : F.gbfsInfo());
-      if (/arcgisonline|cartocdn|openstreetmap\.org|rainviewer\.com|gibs\.earthdata\.nasa\.gov/.test(host)) return { status: 200, type: 'image/png', body: TILE };
-      return null;
-  }
-}
-
-async function setupRoutes(context, mode = {}) {
-  const counts = {};
-  await context.route('**/*', async (route) => {
-    const url = route.request().url();
-    const u = new URL(url);
-    const host = u.hostname;
-    counts[host] = (counts[host] || 0) + 1;
-    if (host === '127.0.0.1') return route.continue();
-    if (host === 'cdn.jsdelivr.net') {
-      const m = u.pathname.match(/^\/npm\/(cesium|satellite\.js)@[^/]+\/(.*)$/);
-      if (!m) return route.fulfill({ status: 404 });
-      const file = path.join(NM, m[1], m[2]);
-      if (!fs.existsSync(file)) return route.fulfill({ status: 404, body: 'missing ' + file });
-      return route.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' }, body: fs.readFileSync(file) });
-    }
-    if (host === WATCH_HOST && mode.watchEnv) {  // the watch service: real worker code, mocked sources
-      const r = route.request();
-      const req = new Request(url, { method: r.method(), headers: { ...r.headers(), origin: 'https://christophergates88.github.io' }, body: ['POST', 'PUT'].includes(r.method()) ? r.postData() : undefined });
-      const resp = await W.handle(req, mode.watchEnv, watchFetch({ now: Date.now() }));
-      const hdr = Object.fromEntries(resp.headers.entries());
-      hdr['access-control-allow-origin'] = '*'; // test page runs on 127.0.0.1; real CORS rules are unit-tested in server/watch/test
-      return route.fulfill({ status: resp.status, headers: hdr, body: await resp.text() });
-    }
-    let target = u;
-    if (/workers\.dev$/.test(host)) {           // the data relay
-      if (mode.relayDown) return route.abort('failed');
-      target = new URL(u.searchParams.get('url'));
-      counts['relay:' + target.hostname] = (counts['relay:' + target.hostname] || 0) + 1;
-    } else if (RELAY_ONLY.has(host)) {
-      return route.abort('failed');               // like the real browser: CORS-blocked
-    }
-    const a = answer(target, mode);
-    if (a === 'abort' || !a) return route.abort(a ? 'failed' : 'blockedbyclient');
-    return route.fulfill({ status: a.status, contentType: a.type, headers: { 'Access-Control-Allow-Origin': '*' }, body: a.body });
-  });
-  return counts;
-}
-
-const browser = await chromium.launch({
-  executablePath: CHROME,
-  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'],
-});
-
-async function openApp(ctxOpts, mode, label) {
-  const context = await browser.newContext({ ...ctxOpts, permissions: [], geolocation: undefined });
-  const counts = await setupRoutes(context, mode);
-  const page = await context.newPage();
-  const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  await page.goto(BASE, { waitUntil: 'load' });
-  await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
-  const started = await page.evaluate(() => !!window.GodView);
-  check(`[${label}] app starts`, started, started ? '' : await page.evaluate(() => document.body.innerText.slice(0, 200)));
-  return { context, page, errors, counts };
-}
-
-async function waitLayers(page, ids) {
-  await page.waitForFunction((ids) => ids.every((id) => {
-    const s = window.GodView.manager.state[id];
-    return s && !s.busy && (s.status === 'ok' || s.status === 'error' || s.status === 'limited');
-  }), ids, { timeout: 30000 }).catch(() => {});
-  return page.evaluate((ids) => Object.fromEntries(ids.map((id) => [id, { ...window.GodView.manager.state[id] }])), ids);
-}
-
-// Screen position of an item, for real taps.
-async function screenPos(page, layer, key) {
-  return page.evaluate(({ layer, key }) => {
-    const G = window.GodView; const C = window.Cesium;
-    const p = G.manager.position(layer, key);
-    if (!p) return null;
-    const w = C.SceneTransforms.worldToWindowCoordinates(G.viewer.scene, p);
-    return w ? { x: w.x, y: w.y } : null;
-  }, { layer, key });
-}
+import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, setupRoutes, WATCH_HOST, F, W, WatchKV, watchFetch, fs, path, server } from './harness.mjs';
 
 // ------------------------------------------------------------ scenario 1: iPhone
 {
@@ -302,7 +128,7 @@ async function screenPos(page, layer, key) {
   check('settings: units change saved', units === 'metric');
   await page.click('#settings-close');
 
-  check('CelesTrak downloaded once (cache honoured)', (counts['celestrak.org'] || 0) === 1, `requests: ${counts['celestrak.org']}`);
+  check('CelesTrak: one download per satellite group (cache honoured)', (counts['celestrak.org'] || 0) === 2, `requests: ${counts['celestrak.org']} for 2 groups`);
   const realErrors = errors.filter((e) => !/favicon/.test(e));
   check('[iPhone] no console errors', realErrors.length === 0, realErrors.slice(0, 5).join(' | '));
   await context.close();
@@ -363,7 +189,7 @@ async function screenPos(page, layer, key) {
   const res = await page.evaluate(() => window.GodView.selfTest());
   const after = await page.evaluate(() => localStorage.getItem('godview.settings.v1'));
   fs.writeFileSync(path.join(outDir, 'selftest-sample.json'), JSON.stringify(res, null, 1));
-  check('selfTest resolves < 60 s with one row per layer', Array.isArray(res) && res.length === nLayers && Date.now() - t0 < 60000, `${res.length} rows in ${Date.now() - t0} ms`);
+  check('selfTest resolves < 60 s with one row per layer (+3 plane-card sources)', Array.isArray(res) && res.length === nLayers + 3 && Date.now() - t0 < 60000, `${res.length} rows in ${Date.now() - t0} ms`);
   const bad = res.filter((r) => !r.ok);
   check('selfTest: every layer ok against sample data', bad.length === 0, bad.map((r) => `${r.id}: ${r.error}`).join(' | '));
   check('selfTest rows have the agreed fields', res.every((r) => ['id', 'name', 'ok', 'count', 'ms', 'via', 'error'].every((k) => k in r)));
@@ -542,6 +368,135 @@ async function screenPos(page, layer, key) {
   const msg = await p2.evaluate(() => document.getElementById('watch-body').innerText);
   check('not set up: plain instructions shown, map still works', /Not set up yet/.test(msg) && /Deploy GodView Watch/.test(msg) && await p2.evaluate(() => window.GodView.manager.state.earthquakes.enabled), msg.slice(0, 120));
   await p2.screenshot({ path: path.join(outDir, 'watch-not-set-up.png') });
+  await c2.close();
+}
+
+// ------------------------------------------------------------ scenario 6 (v4): answer first, calm map, modes, plain cards, hint
+{
+  const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true };
+  const context = await browser.newContext(iphone);
+  const counts = await setupRoutes(context, { dense: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(6000);
+  const first = await page.evaluate(() => ({ mode: window.GodView.settings.get('mode'), on: window.GodView.layers.filter((l) => window.GodView.manager.state[l.id].enabled).map((l) => l.id) }));
+  check('first visit starts in "Around me"', first.mode === 'around' && first.on.includes('flights') && first.on.includes('alerts') && !first.on.includes('cables'), JSON.stringify(first));
+  const st = await page.evaluate(() => { const el = document.getElementById('status'); return { hidden: el.hidden, head: el.querySelector('.s-head')?.textContent, facts: [...el.querySelectorAll('.s-facts span')].map((x) => x.textContent), level: el.dataset.level }; });
+  check('answer first: status shows a headline and up to three facts', !st.hidden && /All clear|Heads-up|Act now/.test(st.head) && st.facts.length >= 2 && st.facts.length <= 3, JSON.stringify(st));
+  check('status facts come from loaded data (weather, aircraft)', st.facts.some((f) => /°F/.test(f)) && st.facts.some((f) => /aircraft/.test(f)), st.facts.join(' | '));
+  // The calm map: at the start view most aircraft are quiet dots; specials stand out.
+  const lodInfo = () => page.evaluate(() => {
+    const prims = window.GodView.manager.ctx.flights.primitives;
+    let icons = 0; let dots = 0; let labels = 0;
+    for (let i = 0; i < prims.length; i++) {
+      const c = prims.get(i);
+      for (let j = 0; j < c.length; j++) { const p = c.get(j); if (!p.show) continue; if (c instanceof window.Cesium.BillboardCollection) icons++; else if (c instanceof window.Cesium.PointPrimitiveCollection) dots++; else labels++; }
+    }
+    return { icons, dots, labels, h: Math.round(window.GodView.globe.getView().heightKm) };
+  });
+  const far = await lodInfo();
+  check('dense sky, zoomed out: few icons, quiet dots for the rest', far.icons <= 45 && far.dots >= 500 && far.labels <= 3, JSON.stringify(far));
+  const sp = await page.evaluate(() => ['a0000a', 'a00014', 'a00015'].map((k) => { const f = window.GodView.manager.ctx.flights.primitives; return window.GodView.manager.describe('flights', k)?.subtitle; }));
+  check('emergency and military aircraft are flagged', /Emergency code 7700/.test(sp[0]) && /Military/.test(sp[1]) && /Military/.test(sp[2]), sp.join(' | '));
+  await page.screenshot({ path: path.join(outDir, 'after-iphone-status.png') });
+  await page.evaluate(() => window.GodView.globe.jumpTo(33.2, -84.0, 40));
+  await page.waitForTimeout(2500);
+  const near = await lodInfo();
+  check('zoomed in: every aircraft in view is a full icon', near.icons >= near.dots && near.icons > 0, JSON.stringify(near));
+  // Same idea for other busy layers (400 buoys)
+  await page.evaluate(() => { window.GodView.globe.jumpTo(32.75, -83.45, 3000); window.GodView.manager.enable('buoys', true); });
+  await page.waitForTimeout(3500);
+  const busy = () => page.evaluate(() => { const c = window.GodView.manager.ctx.buoys.primitives.get(0); let n = 0; let small = 0; for (let i = 0; i < c.length; i++) { const p = c.get(i); if (p.show) { n++; if (p.pixelSize < 7) small++; } } return { shown: n, small, total: c.length }; });
+  const bFar = await busy();
+  await page.evaluate(() => window.GodView.globe.jumpTo(31.0, -88.0, 300));
+  await page.waitForTimeout(2500);
+  const bNear = await busy();
+  check('busy point layers: far out, nearest 120 as small dots; close in, all at full size', bFar.total === 400 && bFar.shown <= 121 && bFar.small === bFar.shown && bNear.shown === 400 && bNear.small === 0, JSON.stringify({ bFar, bNear }));
+  await page.evaluate(() => { window.GodView.manager.enable('buoys', false); window.GodView.globe.jumpTo(33.2, -84.0, 40); });
+  await page.waitForTimeout(1500);
+  // Plain-sentence flight card with route, type, photo credit
+  const key = 'a00064';
+  const say0 = await page.evaluate((k) => window.GodView.manager.describe('flights', k).say, key);
+  const det = await page.evaluate((k) => window.GodView.manager.details('flights', k), key);
+  check('flight card starts with a plain sentence', /ft, (climbing|descending|level)\.$|on the ground\.$/.test(say0), say0);
+  check('details: "Delta 1234-style, Atlanta to New York, Boeing 737, … ft"', /^Delta \d+, Atlanta to New York, Boeing 737, [\d,]+ ft, (climbing|descending|level)\.$|on the ground\.$/.test(det.say) && /planespotters/.test(det.credit), `${det.say} | ${det.credit}`);
+  const priv = await page.evaluate(() => window.GodView.manager.details('flights', 'a00001'));
+  check('privacy: a private owner name is never shown', !JSON.stringify(priv).includes('John Q Sample') && !priv.rows.some((r) => r[0] === 'Operator'), JSON.stringify(priv.rows));
+  const del = await page.evaluate(() => window.GodView.manager.details('flights', 'a00064'));
+  check('airline operator is shown', del.rows.some((r) => r[0] === 'Operator' && /Delta/.test(r[1])));
+  // Open the card through a real tap: centre the camera on the aircraft first.
+  await page.evaluate((k) => { const f = window.GodView.manager.items('flights').find((x) => x.key === k); window.GodView.settings.set('smoothMotion', false); window.GodView.globe.jumpTo(f.lat, f.lon, 25); }, key);
+  await page.waitForTimeout(2500);
+  const pos = await screenPos(page, 'flights', key);
+  if (pos) { await page.touchscreen.tap(pos.x, pos.y); await page.waitForTimeout(1800); }
+  const card = await page.evaluate(() => ({ open: !document.getElementById('card').hidden, title: document.getElementById('card-title').textContent, say: document.getElementById('card-say').textContent, credit: document.getElementById('card-credit').textContent }));
+  await page.screenshot({ path: path.join(outDir, 'after-iphone-card-flight.png') });
+  check('tap a plane: card leads with the plain sentence and photo credit', card.open && /^Delta \d+, Atlanta to New York, Boeing 737/.test(card.say) && /planespotters/.test(card.credit), JSON.stringify(card));
+  if (card.open) await page.click('#card-close');
+  await page.evaluate(() => window.GodView.settings.set('smoothMotion', true));
+  // Status: tap opens What's here; touching the map shrinks it
+  await page.evaluate(() => window.GodView.globe.jumpTo(32.75, -83.45, 900));
+  await page.waitForTimeout(1500);
+  await page.touchscreen.tap(195, 500);
+  await page.waitForTimeout(400);
+  await page.click('#card-close').catch(() => {});
+  const pill = await page.evaluate(() => document.getElementById('status').classList.contains('pill'));
+  check('status shrinks to a pill when you touch the map', pill);
+  await page.click('#status');
+  await page.waitForTimeout(2500);
+  const wh = await page.evaluate(() => !document.getElementById('card').hidden && document.getElementById('card-kicker').textContent);
+  check('tapping the status opens What\'s here', /What's here/.test(wh || ''), String(wh));
+  await page.click('#card-close');
+  // Modes
+  await page.click('#mode-storm');
+  await page.waitForTimeout(3000);
+  const storm = await page.evaluate(() => window.GodView.layers.filter((l) => window.GodView.manager.state[l.id].enabled).map((l) => l.id).sort());
+  check('Storm mode switches the whole layer set in one tap', JSON.stringify(storm) === JSON.stringify(['alerts', 'hurricanes', 'radar', 'rivers', 'spcOutlook', 'spcReports', 'tempGrid']), storm.join(','));
+  await page.screenshot({ path: path.join(outDir, 'after-iphone-mode-storm.png') });
+  await page.click('#mode-sky');
+  await page.waitForTimeout(3500);
+  for (const k of Object.keys(counts)) delete counts[k];
+  await page.waitForTimeout(8000);
+  const offHosts = ['earthquake.usgs.gov', 'api.weather.gov', 'eonet.gsfc.nasa.gov', 'api.rainviewer.com', 'api.water.noaa.gov', 'www.spc.noaa.gov', 'overpass-api.de', 'api.tidesandcurrents.noaa.gov'];
+  const leaked = offHosts.filter((h) => counts[h]);
+  check('layers that are off fetch nothing', leaked.length === 0, leaked.map((h) => `${h}:${counts[h]}`).join(', ') || 'none');
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(4000);
+  const remembered = await page.evaluate(() => ({ mode: window.GodView.settings.get('mode'), on: window.GodView.layers.filter((l) => window.GodView.manager.state[l.id].enabled).map((l) => l.id), tile: document.getElementById('mode-sky').classList.contains('on') }));
+  check('last mode is remembered after reload', remembered.mode === 'sky' && remembered.tile && remembered.on.includes('military') && !remembered.on.includes('radar'), JSON.stringify(remembered));
+  await page.click('#chip-all');
+  await page.waitForTimeout(400);
+  await page.click('#group-weather .group-toggle');
+  await page.click('#row-radar .switch');
+  await page.waitForTimeout(500);
+  const custom = await page.evaluate(() => window.GodView.settings.get('mode'));
+  check('a hand-made change becomes "My mix"', custom === 'custom');
+  await page.screenshot({ path: path.join(outDir, 'after-iphone-all-layers.png') });
+  const rs = await page.evaluate(() => ({ rs: window.GodView.viewer.resolutionScale, dpr: devicePixelRatio }));
+  check('adaptive render scale: sharp (2x) when idle', Math.abs(rs.rs * rs.dpr - Math.min(rs.dpr, 2)) < 0.01, JSON.stringify(rs));
+  const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource/.test(e));
+  check('[v4] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
+  await context.close();
+
+  // First-run hint: shown once, dismissed forever
+  const c2 = await browser.newContext(iphone);
+  await setupRoutes(c2, { showHint: true });
+  const p2 = await c2.newPage();
+  await p2.goto(BASE, { waitUntil: 'load' });
+  await p2.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await p2.waitForTimeout(1500);
+  const shown = await p2.evaluate(() => !document.getElementById('hint').hidden);
+  await p2.screenshot({ path: path.join(outDir, 'after-iphone-hint.png') });
+  await p2.click('#hint-ok');
+  await p2.reload({ waitUntil: 'load' });
+  await p2.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  const again = await p2.evaluate(() => !document.getElementById('hint').hidden);
+  check('first-run hint shows once and stays dismissed', shown && !again);
   await c2.close();
 }
 

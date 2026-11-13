@@ -34,8 +34,9 @@ export function createGlobe(containerId, creditContainerId) {
     requestRenderMode: true,          // only redraw when something changes: saves phone battery
     maximumRenderTimeChange: Infinity,
     msaaSamples: 1,
-    useBrowserRecommendedResolution: true,
+    useBrowserRecommendedResolution: false,
   });
+  adaptiveResolution();
 
   const scene = viewer.scene;
   scene.globe.baseColor = Cesium.Color.fromCssColorString('#0b1a26');
@@ -50,6 +51,21 @@ export function createGlobe(containerId, creditContainerId) {
   // Stop the default double-click "zoom to entity" behaviour.
   viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
   return viewer;
+}
+
+// Sharp when still, lighter while moving: render at up to 2x pixels when the
+// camera is idle and about 1x while it moves, so dragging stays smooth.
+function adaptiveResolution() {
+  const dpr = window.devicePixelRatio || 1;
+  const idle = Math.min(dpr, 2) / dpr;
+  const moving = Math.min(dpr, isTouch() ? 1 : 1.25) / dpr;
+  let t = null;
+  viewer.resolutionScale = idle;
+  viewer.camera.moveStart.addEventListener(() => { clearTimeout(t); if (viewer.resolutionScale !== moving) viewer.resolutionScale = moving; });
+  viewer.camera.moveEnd.addEventListener(() => {
+    clearTimeout(t);
+    t = setTimeout(() => { viewer.resolutionScale = idle; viewer.scene.requestRender(); }, 250);
+  });
 }
 
 export function isTouch() {
