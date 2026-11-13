@@ -412,5 +412,8 @@ export async function addCamera(cam, placeId) {
 }
 export const placesList = () => data.places || [];
 
+// Open the Watch panel from elsewhere (the Now screen): a tab, or one place.
+export function openWatch(which = 'places', placeId = null) { detailId = placeId || null; open(which); }
+
 // Open the Reports tab for a point (from What's here).
 export function openReportsFor(pt) { presetPoint(pt); open('reports'); }

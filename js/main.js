@@ -34,6 +34,8 @@ function loadScript(src) {
 }
 
 async function start() {
+  // Lookout's screens (Now, Cams, Scanner, News) need no globe: show them first.
+  try { (await import('./lookout/shell.js')).initShell(); } catch (e) { console.error('Lookout screens', e); }
   try {
     window.CESIUM_BASE_URL = LIBS.cesiumBase;
     loadCss(LIBS.cesiumBase + 'Widgets/widgets.css');

@@ -18,12 +18,26 @@
   <div id="globe" aria-label="3D globe"></div>
   <div id="crt-overlay" aria-hidden="true"></div>
 
+  <!-- Lookout screens (Now, Cams, Scanner, News): plain, fast screens over the globe.
+       The Map tab shows the globe itself. See js/lookout/. -->
+  <main id="lk" class="lk" hidden>
+    <section id="lk-now" class="lk-view" data-view="now" aria-label="Now" hidden></section>
+    <section id="lk-cams" class="lk-view" data-view="cams" aria-label="Cameras and traffic" hidden></section>
+    <section id="lk-scanner" class="lk-view" data-view="scanner" aria-label="Scanner" hidden></section>
+    <section id="lk-news" class="lk-view" data-view="news" aria-label="Local news" hidden></section>
+  </main>
+
   <header id="topbar">
     <div class="brand" aria-hidden="true">GODVIEW</div>
     <form id="search" role="search" autocomplete="off">
       <svg class="search-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
       <input id="search-input" type="search" inputmode="search" enterkeyhint="search" placeholder="Search places or lat, lon" aria-label="Search places">
     </form>
+    <button id="lk-place" class="lk-place" type="button" hidden aria-label="Change the place these screens show">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/></svg>
+      <span id="lk-place-name">Finding you…</span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <button id="btn-watch" class="icon-btn" aria-label="Watch: places, alerts, brief" title="Watch">
       <svg viewBox="0 0 24 24"><path d="M6 10a6 6 0 0 1 12 0v4l2 3H4l2-3z M10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
       <i id="watch-badge" class="badge" hidden></i>
@@ -132,10 +146,10 @@
 
   <div id="hint" class="hint" hidden role="dialog" aria-label="How GodView works">
     <div class="hint-card">
-      <h2>Three taps</h2>
+      <h2>How it works</h2>
       <ol>
-        <li><b>Pick a mode</b> at the bottom: Around me, Sky, Storm… <b>Reset</b> (far left) puts it back.</li>
-        <li><b>Tap anything</b> on the map for the story behind it.</li>
+        <li><b>Now</b> is the quick look: alerts, weather, roads and cameras where you are.</li>
+        <li><b>Map</b> is the globe: pick a mode at the bottom and tap anything for the story behind it.</li>
         <li><b>Tap the bell</b> for your places, alerts and morning brief.</li>
       </ol>
       <button id="hint-ok" class="btn primary">Got it</button>
@@ -144,6 +158,48 @@
 
   <!-- Conditions report (printable) -->
   <div id="report" class="report" hidden></div>
+
+  <!-- Choose the place the Lookout screens show -->
+  <section id="placepick" class="modal" hidden aria-label="Choose a place">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2>Show me</h2>
+        <button id="placepick-close" class="icon-btn small" aria-label="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div id="placepick-body" class="modal-body"></div>
+    </div>
+  </section>
+
+  <!-- Full-screen camera viewer -->
+  <div id="viewer" class="viewer" hidden role="dialog" aria-label="Camera"></div>
+
+  <!-- Drive mode: big, glanceable, keeps the screen on -->
+  <div id="drive" class="drive" hidden role="dialog" aria-label="Drive mode"></div>
+
+  <nav id="tabbar" class="tabbar" aria-label="Sections">
+    <button data-tab="now" aria-label="Now">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Now</span><i class="tb-dot" hidden></i>
+    </button>
+    <button data-tab="map" aria-label="Map">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M3.8 9.5h16.4M3.8 14.5h16.4M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+      <span>Map</span>
+    </button>
+    <button data-tab="cams" aria-label="Cameras and traffic">
+      <svg viewBox="0 0 24 24"><rect x="3" y="6.5" width="12.5" height="11" rx="2.2" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M15.5 10.5l5-3v9l-5-3" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/></svg>
+      <span>Cams</span>
+    </button>
+    <button data-tab="scanner" aria-label="Scanner">
+      <svg viewBox="0 0 24 24"><rect x="6.5" y="7" width="11" height="14.5" rx="2.2" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M10 7V2.5M9.5 12h5M9.5 15.5h5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
+      <span>Scanner</span><i class="tb-live" hidden></i>
+    </button>
+    <button data-tab="news" aria-label="News">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
+      <span>News</span>
+    </button>
+  </nav>
 
   <div id="toast" role="status" hidden></div>
   <div id="boot" class="boot">GODVIEW <span>starting…</span></div>

@@ -39,6 +39,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 export const BASE = `http://127.0.0.1:${server.address().port}/godview/`;
 
 // 1x1-ish PNG tile (solid dark blue) for every map tile request.
+const SILENT_WAV = Buffer.from('UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=', 'base64');
 const TILE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk4P9fDwAD/AH+fW8VmQAAAABJRU5ErkJggg==', 'base64');
 
 export const results = [];
@@ -87,6 +88,7 @@ export function answer(u, mode) {
     case 'services9.arcgis.com': return mode.viirsDown ? J({ error: { code: 500, message: 'down' } }) : J(F.viirs());
     case 'raw.githubusercontent.com':
       if (/lookout\/feeds\/ga511\.json/.test(p)) return mode.ga511FeedDown ? { status: 404, type: 'text/plain', body: 'nf' } : J(F.ga511Feed(mode.ga511FeedAgeMs));
+      if (/lookout\/feeds\/webcams\.json/.test(p)) return J(F.webcamsFeed());
       if (/\/godview\/data\//.test(p)) {
         if (mode.packsDown) return { status: 404, type: 'text/plain', body: '404: Not Found' };
         if (/\/index\.json$/.test(p)) return J(F.packIndex());
@@ -102,6 +104,19 @@ export function answer(u, mode) {
       if (/event/.test(p)) return J(F.ga511Events());
       return { status: 200, type: 'image/png', body: TILE };
     case 'cwwp2.dot.ca.gov': return J(F.caltrans());
+    // Lookout screens (Now, Cams, Scanner, News)
+    case 'api.bigdatacloud.net': return J(F.reverseGeo(Number(u.searchParams.get('latitude')), Number(u.searchParams.get('longitude'))));
+    case 'api.openmhz.com':
+      if (mode.omhzDown) return 'abort';
+      if (p === '/systems') return J(F.omhzSystems());
+      if (/\/calls/.test(p)) return J(F.omhzCalls(p.split('/')[1]));
+      if (/\/talkgroups/.test(p)) return J(F.omhzTalkgroups());
+      return J({}, 404);
+    case 'media2.openmhz.com': return { status: 200, type: 'audio/wav', body: SILENT_WAV };
+    case 'news.google.com': return T(F.newsRss(u.searchParams.get('q') || ''), 'application/rss+xml');
+    case 'api.gdeltproject.org': return J({ articles: [] });
+    case 'embed.waze.com': return T('<!doctype html><title>Waze</title><body style="background:#123">Waze live map (sample)</body>', 'text/html');
+    case 'imgproxy.windy.com': return { status: 200, type: 'image/png', body: TILE };
     case 'api-v3.amtraker.com': return J(F.amtrak());
     case 'overpass-api.de': return J(F.overpass(u.searchParams.get('data') || ''));
     case 'www.submarinecablemap.com': return J(F.cables());
@@ -137,6 +152,8 @@ export function answer(u, mode) {
 export async function setupRoutes(context, mode = {}) {
   const counts = {};
   if (!mode.showHint) await context.addInitScript(() => { try { localStorage.setItem('godview.hint.v1', '1'); } catch { /* */ } });
+  // GodView v7 opens on the Now tab; the older scenarios test the globe, so they open on Map.
+  await context.addInitScript((lk) => { try { if (!localStorage.getItem('godview.lookout.v1')) localStorage.setItem('godview.lookout.v1', JSON.stringify(lk)); } catch { /* */ } }, mode.lookout || { openTo: 'map' });
   await context.route('**/*', async (route) => {
     const url = route.request().url();
     const u = new URL(url);

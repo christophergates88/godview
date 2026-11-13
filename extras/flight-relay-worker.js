@@ -32,6 +32,10 @@ const ALLOWED_HOSTS = [
   'www.missingkids.org',          // NCMEC missing-children posters
   'tigerweb.geo.census.gov', 'api.census.gov', 'data.openstates.org', 'v3.openstates.org', 'api.open.fec.gov',
   'echodata.epa.gov', 'data.cms.gov', 'api.fdic.gov', 'www.fema.gov', // fallbacks only
+  // GodView v7: the Lookout screens
+  'news.google.com',              // local news (RSS; web pages cannot read it directly)
+  'api.openmhz.com',              // scanner systems and calls (fallback only)
+  'api.gdeltproject.org',         // news backup (fallback only)
 ];
 const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 

@@ -123,7 +123,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.click('#btn-settings');
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(outDir, 'iphone-settings.png') });
-  await page.selectOption('#settings-body select >> nth=0', 'metric');
+  await page.locator('#settings-body .field', { hasText: 'Units' }).locator('select').selectOption('metric');
   const units = await page.evaluate(() => window.GodView.settings.get('units'));
   check('settings: units change saved', units === 'metric');
   await page.click('#settings-close');
@@ -797,6 +797,119 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   const s3 = await waitLayers(p2, ['ga511Events', 'ga511Cameras']);
   check('old copy: road events hidden with a plain reason', s3.ga511Events.status === 'error' && /2 days ago/.test(s3.ga511Events.message) && /hidden/.test(s3.ga511Events.message), s3.ga511Events.message);
   check('old copy: cameras still shown, with the list\'s age', s3.ga511Cameras.status === 'ok' && /2 days ago/.test(s3.ga511Cameras.note), s3.ga511Cameras.note);
+  await c2.close();
+}
+
+// ------------------------------------------------------------ scenario 9 (v7): GodView + Lookout in one app (tabs)
+{
+  const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true };
+  const watchEnv = { KV: new WatchKV(), WATCH_TOKEN: 'k'.repeat(48), NTFY_TOPIC: 'gv-test' };
+  await watchEnv.KV.put('cfg', JSON.stringify({ places: [{ id: 'home', name: 'Sample Home', lat: 32.84, lon: -83.63, radiusKm: 30, kind: 'home' }], settings: {} }));
+  const place = { lat: 32.84, lon: -83.63, name: 'Sampleville', state: 'GA', county: 'Sample County', country: 'US', source: 'picked' };
+  const context = await browser.newContext(iphone);
+  const counts = await setupRoutes(context, { watchEnv, lookout: { openTo: 'now', place } });
+  await context.addInitScript(() => { try { localStorage.setItem('godview.watch.v1', JSON.stringify({ token: 'k'.repeat(48), host: 'godview-watch.testsub.workers.dev' })); } catch { /* */ } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(BASE, { waitUntil: 'load' });
+  // Now shows before the globe has finished starting
+  await page.waitForFunction(() => /Sampleville/.test(document.getElementById('lk-place-name')?.textContent || '') && document.querySelector('#nw-hero .temp'), null, { timeout: 30000 }).catch(() => {});
+  const early = await page.evaluate(() => ({ tab: document.body.className, now: !document.getElementById('lk-now').hidden, booting: !!document.getElementById('boot'), hero: document.getElementById('nw-hero')?.innerText || '' }));
+  check('opens on Now (place, weather and alert) without waiting for the globe', /tab-lk/.test(early.tab) && early.now && /Act now/i.test(early.hero) && /Severe Thunderstorm Warning/.test(early.hero) && /°F/.test(early.hero), JSON.stringify(early).slice(0, 300));
+  await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(2500);
+  const now = await page.evaluate(() => ({
+    alerts: document.querySelectorAll('#nw-alerts .lk-alert').length,
+    roads: [...document.querySelectorAll('#nw-roads .lk-row b')].map((b) => b.textContent),
+    cams: document.querySelectorAll('#nw-cams .cam').length,
+    places: [...document.querySelectorAll('#nw-places .tile .t-name')].map((b) => b.textContent),
+    links: document.querySelectorAll('#nw-links a.lk-row').length,
+    paused: window.GodView.viewer.useDefaultRenderLoop === false,
+    sheetHidden: getComputedStyle(document.getElementById('sheet')).display === 'none',
+    dot: !document.querySelector('#tabbar [data-tab="now"] .tb-dot').hidden,
+  }));
+  check('Now: alerts, Georgia 511 road events in words, nearest cameras, Watch places, safety links', now.alerts === 2 && now.roads.includes('Crash · I-16') && now.cams >= 2 && now.places.includes('Sample Home') && now.links >= 4, JSON.stringify(now));
+  check('Now: the globe pauses and the map controls step aside; the Now tab shows a dot for the warning', now.paused && now.sheetHidden && now.dot, JSON.stringify(now));
+  await page.screenshot({ path: path.join(outDir, 'lookout-now.png') });
+  // Camera viewer from the strip
+  await page.click('#nw-cams .cam');
+  await page.waitForTimeout(400);
+  const v = await page.evaluate(() => ({ open: !document.getElementById('viewer').hidden, title: document.querySelector('#viewer .v-title b')?.textContent, src: document.getElementById('v-pic')?.src || '' }));
+  check('camera viewer opens on the nearest camera with a fresh picture', v.open && /SR 44 at Sample Rd/.test(v.title) && /511ga\.org\/map\/Cctv\/186\?t=\d+/.test(v.src), JSON.stringify(v));
+  await page.click('#v-next');
+  const v2 = await page.evaluate(() => document.querySelector('#viewer .v-title b')?.textContent);
+  check('viewer: next camera', v2 && v2 !== v.title, v2);
+  await page.click('#v-close');
+  // Cams tab: grid with filters, then Traffic
+  await page.click('#tabbar [data-tab="cams"]');
+  await page.waitForFunction(() => document.querySelectorAll('#lk-cams .lk-grid .cam').length > 0, null, { timeout: 15000 }).catch(() => {});
+  const cg = await page.evaluate(() => ({ chips: [...document.querySelectorAll('#lk-cams .lk-chips button')].map((b) => b.textContent.trim()), n: document.querySelectorAll('#lk-cams .lk-grid .cam').length, far: /far away/.test(document.getElementById('lk-cams').innerText) }));
+  check('Cams: traffic cameras and webcams near the place (far ones left out), with filters', cg.n === 3 && cg.chips.includes('Traffic 2') && cg.chips.includes('Webcams 1') && !cg.far, JSON.stringify(cg));
+  await page.click('#lk-cams [data-seg="traffic"]');
+  await page.waitForTimeout(800);
+  const tr = await page.evaluate(() => ({ ev: [...document.querySelectorAll('#tr-events .lk-row b')].map((b) => b.textContent), waze: document.getElementById('waze')?.src || '' }));
+  check('Traffic: Georgia 511 events nearest first and the live Waze map', tr.ev[0] === 'Crash · I-16' && tr.ev.includes('Roadwork · SR 22') && /embed\.waze\.com/.test(tr.waze), JSON.stringify(tr));
+  // Show on map from a road event: Map tab, globe drawing again, the event's card open
+  await page.click('#tr-events .lk-row');
+  await page.waitForFunction(() => !document.getElementById('card').hidden, null, { timeout: 20000 }).catch(() => {});
+  const sm = await page.evaluate(() => ({ tab: document.body.className, loop: window.GodView.viewer.useDefaultRenderLoop, card: document.getElementById('card').hidden ? '' : document.getElementById('card-title').textContent, layer: window.GodView.manager.state.ga511Events.enabled }));
+  check('"Show on map" switches to the globe (drawing again), turns the layer on and opens the event', /tab-map/.test(sm.tab) && sm.loop === true && sm.layer && /Incident · I-16/.test(sm.card), JSON.stringify(sm));
+  await page.screenshot({ path: path.join(outDir, 'lookout-show-on-map.png') });
+  await page.click('#card-close').catch(() => {});
+  // Scanner: systems in your state, your county first; tap plays the latest calls
+  await page.click('#tabbar [data-tab="scanner"]');
+  await page.waitForFunction(() => document.querySelectorAll('#sc-list .lk-row').length > 0, null, { timeout: 15000 }).catch(() => {});
+  const sc = await page.evaluate(() => [...document.querySelectorAll('#sc-list .lk-row')].map((r) => r.innerText.replace(/\s+/g, ' ')));
+  check('Scanner: OpenMHz systems in Georgia, your county first, other states left out', sc.length === 2 && /Sample County Public Safety/.test(sc[0]) && /Your area/.test(sc[0]) && !sc.some((x) => /Out of State/.test(x)), JSON.stringify(sc));
+  await page.click('#sc-list .lk-row');
+  await page.waitForFunction(() => document.querySelector('#sc-player .sys'), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  const pl = await page.evaluate(() => ({ sys: document.querySelector('#sc-player .sys')?.textContent, text: document.getElementById('sc-player')?.innerText || '', live: !document.querySelector('#tabbar [data-tab="scanner"] .tb-live').hidden }));
+  check('Scanner: plays the latest calls with talkgroup names; the tab shows it is live', /Sample County Public Safety/.test(pl.sys || '') && /(Fire|Police) Dispatch|EMS Ops/.test(pl.text) && pl.live, JSON.stringify(pl).slice(0, 300));
+  await page.click('#sc-stop');
+  const stopped = await page.evaluate(() => document.querySelector('#tabbar [data-tab="scanner"] .tb-live').hidden && !document.querySelector('#sc-player .sys'));
+  check('Scanner: Stop ends it', stopped);
+  // News: local headlines through the relay
+  await page.click('#tabbar [data-tab="news"]');
+  await page.waitForFunction(() => document.querySelectorAll('#nw-list .story').length > 0, null, { timeout: 15000 }).catch(() => {});
+  const nw = await page.evaluate(() => [...document.querySelectorAll('#nw-list .story b')].map((b) => b.textContent));
+  check('News: local headlines (source trimmed from the title), newest first', nw[0] === 'Sample County opens new bridge' && nw.length === 2 && (counts['relay:news.google.com'] || 0) >= 1, JSON.stringify(nw) + ' relay=' + counts['relay:news.google.com']);
+  // Place picker: search a place; Now follows it
+  await page.click('#tabbar [data-tab="now"]');
+  await page.click('#lk-place');
+  await page.fill('#pp-q', 'Atlanta');
+  await page.click('#pp-form button[type="submit"]');
+  await page.waitForSelector('#pp-res [data-i]', { timeout: 10000 }).catch(() => {});
+  await page.click('#pp-res [data-i]');
+  await page.waitForTimeout(1500);
+  const moved = await page.evaluate(() => ({ name: document.getElementById('lk-place-name').textContent, saved: JSON.parse(localStorage.getItem('godview.lookout.v1')).place }));
+  check('place picker: a searched place becomes the place every screen shows (and is remembered)', /Atlanta/.test(moved.name) && moved.saved.source === 'picked' && Math.abs(moved.saved.lat - 33.289) < 0.01, JSON.stringify(moved));
+  // Drive mode
+  await page.click('#nw-drive');
+  await page.waitForTimeout(800);
+  const dv = await page.evaluate(() => ({ open: !document.getElementById('drive').hidden, text: document.getElementById('drive').innerText }));
+  check('drive mode: the time, weather and the most serious alert in big type', dv.open && /Severe Thunderstorm Warning/.test(dv.text) && /°F/.test(dv.text), dv.text.replace(/\s+/g, ' ').slice(0, 160));
+  await page.screenshot({ path: path.join(outDir, 'lookout-drive.png') });
+  await page.click('#d-done');
+  // Settings: where GodView opens
+  await page.click('#btn-settings');
+  const opt = await page.evaluate(() => { const f = [...document.querySelectorAll('#settings-body .field')].find((x) => /Opens to/.test(x.innerText)); const s = f && f.querySelector('select'); if (!s) return null; s.value = 'map'; s.dispatchEvent(new Event('change')); return JSON.parse(localStorage.getItem('godview.lookout.v1')).openTo; });
+  check('Settings: choose whether GodView opens on Now, Map or where you left off', opt === 'map', String(opt));
+  await page.click('#settings-close');
+  const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource|play\(\) request|NotAllowedError|NotSupportedError/.test(e));
+  check('[v7] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
+  await context.close();
+
+  // A ?tab= link opens that tab (the old Lookout address forwards to ?tab=now)
+  const c2 = await browser.newContext(iphone);
+  await setupRoutes(c2, { lookout: { openTo: 'map', place } });
+  const p2 = await c2.newPage();
+  await p2.goto(BASE + '?tab=cams', { waitUntil: 'load' });
+  await p2.waitForTimeout(1500);
+  const t2 = await p2.evaluate(() => ({ cams: !document.getElementById('lk-cams').hidden, current: document.querySelector('#tabbar [aria-current="page"]')?.dataset.tab }));
+  check('?tab=cams opens the Cams tab', t2.cams && t2.current === 'cams', JSON.stringify(t2));
   await c2.close();
 }
 

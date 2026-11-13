@@ -11,6 +11,10 @@ import { reportSourcesTest } from './reports.js';
 import { inferFromManager } from './infer.js';
 import { AIRCRAFT_INFO } from './config.js';
 import { fetchJSON } from './core/net.js';
+import * as watchMod from './watch.js';
+import * as statusMod from './status.js';
+import * as uiMod from './ui.js';
+import { attachApp } from './lookout/shell.js';
 
 // Self-test rows for the plane-card sources (adsbdb, planespotters): one real
 // lookup of a random aircraft each. Same row shape as the layer rows.
@@ -74,4 +78,7 @@ export async function start() {
     },
     watchSelfTest,
     inferences: (lat, lon, km = 40) => { const v = globe.getView(); return inferFromManager(manager, { lat: lat ?? v.lat, lon: lon ?? v.lon }, km); } };
+
+  // The Lookout screens (Now, Cams, Scanner, News) started before the globe; hand them the app.
+  attachApp({ viewer, manager, globe, watch: watchMod, status: statusMod, ui: uiMod });
 }

@@ -69,6 +69,7 @@ export const rainviewer = () => {
 export const openMeteo = () => ({
   latitude: 32.75, longitude: -83.68, timezone: 'America/New_York',
   current: { time: '2026-11-12T16:00', interval: 900, temperature_2m: 18.4, relative_humidity_2m: 61, apparent_temperature: 17.9, precipitation: 0.0, weather_code: 2, wind_speed_10m: 12.3, wind_direction_10m: 225, wind_gusts_10m: 25.1, cloud_cover: 40 },
+  daily: { time: ['2026-11-12', '2026-11-13'], weather_code: [2, 61], temperature_2m_max: [21.2, 17.0], temperature_2m_min: [8.1, 9.4], precipitation_probability_max: [10, 70], sunrise: ['2026-11-12T06:58', '2026-11-13T06:59'], sunset: ['2026-11-12T17:31', '2026-11-13T17:30'] },
 });
 
 export const geocode = () => ({
@@ -313,3 +314,22 @@ export const packIndex = () => ({
   }])),
 });
 export const packTile = (name, key) => ({ pack: name, built: PACK_BUILT, fields: PACK_FIELDS[name], rows: (PACK_ROWS[name] || []).filter((r) => packTileOf(r) === key) });
+
+// ---------------------------------------------------------------- v7: Lookout screens (Now, Cams, Scanner, News)
+export const reverseGeo = (lat, lon) => ({ latitude: lat, longitude: lon, city: 'Sampleville', locality: 'Sampleville', principalSubdivision: 'Georgia', principalSubdivisionCode: 'US-GA', countryCode: 'US',
+  localityInfo: { administrative: [{ name: 'United States of America', adminLevel: 2 }, { name: 'Georgia', adminLevel: 4 }, { name: 'Sample County', adminLevel: 6 }] } });
+export const webcamsFeed = () => ({ updated: new Date(now - 20 * 60e3).toISOString(), webcams: [
+  { id: 9001, title: 'Sample Lake: Marina', lat: 32.90, lon: -83.50, city: 'Sampleville', img: 'https://imgproxy.windy.com/_/preview/plain/current/9001/original.jpg?v=2', live: true, url: 'https://windy.com/webcams/9001' },
+  { id: 9002, title: 'Downtown Sample (far away)', lat: 40.71, lon: -74.0, city: 'Elsewhere', img: 'https://imgproxy.windy.com/_/preview/plain/current/9002/original.jpg?v=2', live: false, url: 'https://windy.com/webcams/9002' },
+] });
+export const omhzSystems = () => ({ success: true, systems: [
+  { name: 'Sample County Public Safety', shortName: 'samplecty', systemType: 'county', city: null, county: 'Sample', state: 'GA', active: true, lastActive: new Date(now - 60e3).toISOString(), callAvg: 5 },
+  { name: 'Atlanta Sample P25', shortName: 'atlsample', systemType: 'city', city: 'Atlanta', county: '', state: 'GA', active: true, lastActive: new Date(now - 30e3).toISOString(), callAvg: 20 },
+  { name: 'Out of State Sample', shortName: 'oos', systemType: 'city', city: 'Elsewhere', county: '', state: 'TX', active: true, lastActive: new Date(now - 30e3).toISOString(), callAvg: 50 },
+] });
+export const omhzCalls = (sys) => ({ direction: 'newer', calls: [3, 2, 1].map((i) => ({ _id: `${sys}-${i}`, talkgroupNum: 100 + i, time: new Date(now - i * 60e3).toISOString(), len: 4, emergency: i === 1, url: `https://media2.openmhz.com/media/${sys}/${100 + i}/${sys}-${i}.m4a` })) });
+export const omhzTalkgroups = () => ({ talkgroups: { 101: { num: 101, alpha: 'FIRE DISP', description: 'Fire Dispatch' }, 102: { num: 102, alpha: 'PD 1', description: 'Police Dispatch' }, 103: { num: 103, alpha: 'EMS', description: 'EMS Ops' } } });
+export const newsRss = (q) => `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${q.replace(/[<&>"]/g, '')}</title>
+<item><title>Sample County opens new bridge - Sample Gazette</title><link>https://news.google.com/rss/articles/sample1</link><pubDate>${new Date(now - 2 * 3600e3).toUTCString()}</pubDate><source url="https://gazette.example">Sample Gazette</source></item>
+<item><title>Storm cleanup continues in Sampleville - Sample TV</title><link>https://news.google.com/rss/articles/sample2</link><pubDate>${new Date(now - 26 * 3600e3).toUTCString()}</pubDate><source url="https://tv.example">Sample TV</source></item>
+</channel></rss>`;

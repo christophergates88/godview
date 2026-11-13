@@ -4,7 +4,7 @@
 
 export const APP = {
   name: 'GodView',
-  version: '2.0.0',
+  version: '7.0.0',
 };
 
 // Libraries (pinned versions, loaded from the jsDelivr CDN).
@@ -97,6 +97,19 @@ export const ENDPOINTS = {
   ga511Feed: 'https://raw.githubusercontent.com/christophergates88/lookout/feeds/ga511.json',
   // Weekly data packs (plate readers, cell towers, hospitals and nursing homes): see scripts/build_packs.py
   packs: 'https://raw.githubusercontent.com/christophergates88/godview/data/',
+  // Lookout screens (Now, Cams, Scanner, News): js/lookout/
+  webcamsFeed: 'https://raw.githubusercontent.com/christophergates88/lookout/feeds/webcams.json', // Windy webcams, rebuilt by the Lookout repo's feed job
+  weatherNow: 'https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}' +
+    '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=2&wind_speed_unit=kmh&timezone=auto',
+  nwsPoint: 'https://api.weather.gov/alerts/active?point={lat},{lon}',
+  reverseGeocode: 'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat}&longitude={lon}&localityLanguage=en',
+  openmhzSystems: 'https://api.openmhz.com/systems',
+  openmhzCalls: 'https://api.openmhz.com/{system}/calls',
+  openmhzTalkgroups: 'https://api.openmhz.com/{system}/talkgroups',
+  googleNews: 'https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en',   // through the data relay (no CORS)
+  gdeltNews: 'https://api.gdeltproject.org/api/v2/doc/doc?query={q}&mode=artlist&maxrecords=30&format=json&sort=datedesc&timespan=3d',
+  wazeEmbed: 'https://embed.waze.com/iframe?zoom=12&lat={lat}&lon={lon}&ct=livemap&pin=1',
   ga511Cameras: 'https://511ga.org/api/v2/get/cameras?key={key}&format=json',
   ga511Events: 'https://511ga.org/api/v2/get/event?key={key}&format=json',
   caltransCctv: 'https://cwwp2.dot.ca.gov/data/d{d}/cctv/cctvStatusD{dd}.json',
@@ -120,6 +133,9 @@ export const ENDPOINTS = {
 // "only" = always use the relay (direct is known to be blocked);
 // "fallback" = try direct first, use the relay only if the browser blocks it.
 export const RELAY_HOSTS = {
+  'news.google.com': 'only',          // Lookout News (RSS)
+  'api.openmhz.com': 'fallback',      // Lookout Scanner: often refuses web pages when busy
+  'api.gdeltproject.org': 'fallback', // Lookout News backup
   'api.adsb.lol': 'only',
   'opensky-network.org': 'only',
   'api.airplanes.live': 'only',

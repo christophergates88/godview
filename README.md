@@ -6,6 +6,13 @@ hazards, ground & infrastructure, and signals & media. Tap anything for
 details; follow a moving aircraft, satellite or train; tap empty ground for the
 weather there; press the (i) button for a plain-language "What's here" briefing.
 
+**v7: GodView and Lookout are one app.** A tab bar runs along the bottom:
+**Now** (Lookout's quick look: alerts, weather, road events, nearest cameras, your
+Watch places, drive mode, safety links), **Map** (the globe), **Cams** (every
+public camera nearby, plus traffic and the live Waze map), **Scanner** (police,
+fire and EMS dispatch audio that plays in the app, from OpenMHz) and **News**
+(local headlines). See "Now, Cams, Scanner, News" below.
+
 It is a plain static website (no build step), made for iPhone first and also
 comfortable on a Mac. Most layers need no key; a few go through your own small
 relay, and two optional layers use free keys (see below).
@@ -43,6 +50,7 @@ and open `http://localhost:8000/` (opening `index.html` directly from disk will 
 | `js/layers/*.js` | One file per layer (46). `_template.js` is a starting point. |
 | `js/layers/lib/` | Shared helpers: `point-layer.js`, `shape-layer.js`, `imagery-layer.js` (layer factories), `overpass.js` (OpenStreetMap, last-resort fallback), `arcgis.js` (map-service queries + main/fallback switch), `geo.js`, `icons.js`, `airports.js`. |
 | `extras/flight-relay-worker.js` | The data relay (Cloudflare Worker) source. Not loaded by the app. |
+| `js/lookout/` | The Now, Cams, Scanner and News tabs (shell, place, feeds, viewer, drive mode, links). |
 | `test/` | Offline test harness (not part of the app). |
 
 ## How to add a layer
@@ -192,6 +200,42 @@ save downloaded data in the cache, as normal use does).
   setup link to the Mac's clipboard; on the iPhone, paste it in the bell panel
   and tap Connect (an empty box reads the clipboard). A brief that falls back to
   plain wording says why.
+
+## Now, Cams, Scanner, News (v7: Lookout inside GodView)
+
+Lookout used to be a separate web app. Its screens are now GodView's tabs, built
+in `js/lookout/`, and its old address forwards to GodView's Now tab (the old page
+is kept as `lookout/classic.html`).
+
+- **They load before the globe.** `js/main.js` starts the tabs first, so Now shows
+  in about a second; the globe starts behind it and joins when ready
+  (`attachApp` in `js/lookout/shell.js`). While another tab is open the globe
+  stops drawing, which saves battery.
+- **One place for every screen.** The place button at the top shows the town it is
+  using. It is your location (read quietly only if you already allowed it, since the
+  iPhone app asks again on every launch), else the place you picked (search, a Watch
+  place, or where the map is looking), else your first Watch place. Picking a place
+  also moves the globe there.
+- **Now:** the headline (the most serious weather alert, or the Watch check), the
+  weather, alerts you can open, Georgia 511 road events in plain words ("Crash ·
+  I-16"), the nearest cameras, your Watch places and the latest brief, quick
+  buttons (Drive mode, Map here, Scanner, News) and safety links (power outages,
+  crime map, wildfires, county emergency info). The Now tab shows a dot when there
+  is a warning.
+- **Drive mode:** the time, the weather, the most serious alert and the nearest road
+  problem in big type; it asks the phone to keep the screen on.
+- **Cams:** Georgia 511 traffic cameras and public webcams (Windy, from the Lookout
+  feed job) near the place, nearest first, with filters. Tap for a full-screen
+  viewer (swipe for the next; traffic cameras refresh every 10 s), "Show on map"
+  opens the camera's card on the globe. **Traffic** lists road events and shows the
+  live Waze map.
+- **Scanner:** radio systems in your state that publish their dispatch calls on
+  OpenMHz, your county first. Tap one to hear the latest calls with talkgroup
+  names, then new calls as they come in. Broadcastify and the rest are links.
+- **News:** local headlines from Google News (through the data relay; one retry,
+  then GDELT as a backup), this week or the last hour.
+- **Settings > Opens to:** Now (default), Map, or where you left off. A link with
+  `?tab=now|map|cams|scanner|news` opens that tab.
 
 ## Watch, Brief, Remember (the watch service)
 

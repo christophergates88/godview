@@ -13,6 +13,7 @@ import { MODES, GROUP_COLORS, applyMode, staggerOn, cancelPending, snapshot, res
 import { initStatus } from './status.js';
 import { initHint } from './hint.js';
 import { ask, choose } from './dialog.js';
+import { prefs as lookoutPrefs } from './lookout/place.js';
 
 const $ = (id) => document.getElementById(id);
 const Cesium = () => window.Cesium;
@@ -455,6 +456,14 @@ function addRows(rows) {
   $('card-rows').insertAdjacentHTML('beforeend', (rows || []).map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join(''));
 }
 
+// For the Lookout screens: open the card of a loaded item. True if it was there.
+export function openLayerItem(layerId, key) {
+  const d = M && M.describe(layerId, key);
+  if (!d) return false;
+  openItem(layerId, key, d);
+  return true;
+}
+
 function openItem(layerId, key, d) {
   if (globe.isFollowing()) globe.unfollow();
   globe.clearMarker('probe');
@@ -771,6 +780,7 @@ function openSettings() {
   field('<small>Reset puts back the layers GodView starts with. You can undo either for a few seconds.</small>', lr, true);
 
   sec('General');
+  field('Opens to<small>The screen GodView shows when you open it</small>', select([['now', 'Now (the quick look)'], ['map', 'Map (the globe)'], ['last', 'Where I left off']], lookoutPrefs.get('openTo') || 'now', (v) => lookoutPrefs.set('openTo', v)));
   field('Units', select([['imperial', 'Imperial (ft, mph, °F)'], ['metric', 'Metric (m, km/h, °C)']], S.units, (v) => { change('units', v); cardTick(); }));
   field('Smooth aircraft motion<small>Estimates position between updates</small>', toggle(S.smoothMotion, (v) => change('smoothMotion', v)));
 
@@ -891,9 +901,10 @@ function openSettings() {
   const r = document.createElement('div');
   r.className = 'inline';
   r.appendChild(button('Reset all settings', async () => {
-    const yes = await ask({ title: 'Reset all settings?', text: 'Layers, units, start location and refresh times go back to how GodView starts, on this device. Your Watch places and keys stay.', ok: 'Reset everything', danger: true });
+    const yes = await ask({ title: 'Reset all settings?', text: 'Layers, units, start location, refresh times and the place the Now screen shows go back to how GodView starts, on this device. Your Watch places and keys stay.', ok: 'Reset everything', danger: true });
     if (!yes) return;
     settings.reset();
+    lookoutPrefs.clear();
     location.reload();
   }, 'danger'));
   field('', r, true);
