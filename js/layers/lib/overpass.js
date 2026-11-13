@@ -16,8 +16,20 @@ export function overpass(ctx, q, selectors, limit = 400) {
   const key = body;
   const hit = memo.get(key);
   if (hit && Date.now() - hit.t < 600000) return Promise.resolve(hit.data);
-  const run = () => ctx.net.get(ENDPOINTS.overpass.replace('{q}', encodeURIComponent(body)), { timeoutMs: 30000 })
-    .then((data) => { memo.set(key, { t: Date.now(), data }); if (memo.size > 30) memo.delete(memo.keys().next().value); return data; });
+  // The public Overpass servers are often busy; try each mirror in turn.
+  const urls = [ENDPOINTS.overpass, ...(ENDPOINTS.overpassMirrors || [])].map((u) => u.replace('{q}', encodeURIComponent(body)));
+  const run = async () => {
+    let lastErr;
+    for (const u of urls) {
+      try {
+        const data = await ctx.net.get(u, { timeoutMs: 20000 });
+        memo.set(key, { t: Date.now(), data });
+        if (memo.size > 30) memo.delete(memo.keys().next().value);
+        return data;
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  };
   const p = chain.then(run, run);
   chain = p.catch(() => {});
   return p;

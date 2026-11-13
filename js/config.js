@@ -94,6 +94,7 @@ export const ENDPOINTS = {
   caltransCctv: 'https://cwwp2.dot.ca.gov/data/d{d}/cctv/cctvStatusD{dd}.json',
   amtrak: 'https://api-v3.amtraker.com/v3/trains',
   overpass: 'https://overpass-api.de/api/interpreter?data={q}',
+  overpassMirrors: ['https://overpass.private.coffee/api/interpreter?data={q}', 'https://overpass.kumi.systems/api/interpreter?data={q}'],
   cables: 'https://www.submarinecablemap.com/api/v3/cable/cable-geo.json',
   // Signals & media
   radio: 'https://de1.api.radio-browser.info/json/stations/search?geo_lat={lat}&geo_long={lon}&geo_distance={m}&has_geo_info=true&hidebroken=true&order=clickcount&reverse=true&limit=150',
