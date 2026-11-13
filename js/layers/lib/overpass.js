@@ -28,6 +28,10 @@ export function overpass(ctx, q, selectors, limit = 400) {
         return data;
       } catch (e) { lastErr = e; }
     }
+    // Every server failed. Since 2026 the free public servers are often full; say so plainly.
+    if (lastErr && /Timed out|502|503|504|429|capacity/i.test(String(lastErr.message || lastErr))) {
+      throw new ctx.net.FeedError("OpenStreetMap's free lookup servers are full right now. Try again in a few minutes.", { kind: 'busy' });
+    }
     throw lastErr;
   };
   const p = chain.then(run, run);

@@ -309,3 +309,54 @@ Object.assign(INTERVALS, {
   peopleMissing: { def: 3600, min: 1800 },
   peopleFema: { def: 3600, min: 1800 },
 });
+
+// ---------------------------------------------------------------------------
+// EARTH PACK (js/layers/earth-pack.js): the "Live from orbit" group and the extra
+// live systems. Kept in one block so it can be moved or removed in one piece.
+// Every address here was loaded from the live site on 2026-11-12 before it was added.
+GROUPS.splice(Math.max(0, GROUPS.findIndex((g) => g.id === 'weather')), 0, { id: 'orbit', name: 'Live from orbit' });
+
+Object.assign(ENDPOINTS, {
+  nexradTiles: 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png',
+  nexradMeta: 'https://mesonet.agron.iastate.edu/json/tms.json',
+  railTiles: 'https://a.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
+  seamarkTiles: 'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
+  terrain: 'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer',
+  gdacs: 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ,TC,FL,VO,DR,WF&fromDate={from}&toDate={to}&alertlevel=green;orange;red',
+  dsn: 'https://eyes.nasa.gov/dsn/data/dsn.xml?r={r}',
+  ioda: 'https://api.ioda.inetintel.cc.gatech.edu/v2/outages/events?from={from}&until={until}&limit=300&entityType=country',
+  aisBaltic: 'https://meri.digitraffic.fi/api/ais/v1/locations',
+  aisBalticNames: 'https://meri.digitraffic.fi/api/ais/v1/vessels',
+  radarSites: 'https://api.weather.gov/radar/stations?stationType=WSR-88D',
+  usgsWater: 'https://waterservices.usgs.gov/nwis/iv/?format=json&bBox={w},{s},{e},{n}&parameterCd=00065,00060,62614,62615,00010&siteStatus=active',
+  waves: 'https://marine-api.open-meteo.com/v1/marine?latitude={lats}&longitude={lons}&current=wave_height,wave_direction,wave_period,sea_surface_temperature',
+  powerLines: 'https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/Electric_Power_Transmission_Lines/FeatureServer/0/query' +
+    '?where=1%3D1&geometry={w},{s},{e},{n}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects' +
+    '&outFields=OWNER,VOLTAGE,VOLT_CLASS,TYPE,STATUS,SUB_1,SUB_2&resultRecordCount=800&maxAllowableOffset=0.002&geometryPrecision=4&f=geojson',
+});
+
+Object.assign(INTERVALS, {
+  orbitGoesEast: { def: 600, min: 600 },   // NASA publishes a new frame every 10 minutes
+  orbitGoesWest: { def: 600, min: 600 },
+  orbitHimawari: { def: 600, min: 600 },
+  orbitRain: { def: 1800, min: 1800 },
+  orbitSst: { def: 21600, min: 3600 },
+  orbitSnow: { def: 21600, min: 3600 },
+  orbitSmoke: { def: 21600, min: 3600 },
+  orbitNo2: { def: 43200, min: 3600 },
+  orbitFlood: { def: 21600, min: 3600 },
+  orbitNight: { def: 21600, min: 3600 },
+  orbitPeople: { def: 0, min: 0 },
+  nexrad: { def: 300, min: 300 },          // the national mosaic is redrawn every 5 minutes
+  radarSites: { def: 600, min: 300 },
+  gdacs: { def: 900, min: 300 },
+  usgsWater: { def: 900, min: 600 },       // gauges report about every 15 minutes
+  dsn: { def: 60, min: 30 },
+  shipsBaltic: { def: 60, min: 30 },
+  waves: { def: 1800, min: 900 },
+  seamarks: { def: 0, min: 0 },
+  powerLines: { def: 0, min: 0 },
+  rail: { def: 0, min: 0 },
+  terrain3d: { def: 0, min: 0 },
+  netOutages: { def: 900, min: 600 },
+});

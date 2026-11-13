@@ -116,3 +116,7 @@ export const LAYERS = [
   // People & records
   peopleOfficials, peopleCensus, peopleNotable, peopleMoney, peopleEpa, peopleCare, peopleBanks, peopleFema, peopleMissing,
 ];
+
+// Earth pack: "Live from orbit" and the extra live systems (see earth-pack.js).
+import { EARTH_LAYERS } from './earth-pack.js';
+LAYERS.push(...EARTH_LAYERS);

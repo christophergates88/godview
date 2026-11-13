@@ -181,7 +181,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.evaluate(() => window.GodView.globe.jumpTo(33.3, -83.4, 330));
   await page.waitForTimeout(2500);
   const nLayers = await page.evaluate(() => window.GodView.layers.length);
-  check('registry has 25-60 layers', nLayers >= 25 && nLayers <= 60, String(nLayers));
+  check('registry has 25-100 layers', nLayers >= 25 && nLayers <= 100, String(nLayers));
 
   // Self-test: must resolve, cover every layer, and not change saved settings.
   const before = await page.evaluate(() => localStorage.getItem('godview.settings.v1'));

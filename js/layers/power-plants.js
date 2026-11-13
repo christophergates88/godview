@@ -1,9 +1,8 @@
-// Power plants in view, from OpenStreetMap (Overpass API).
+// Power plants in view: every plant of 10 MW and up, coloured by fuel.
+// Reads the list that ships with GodView (see lib/plants.js), so it always loads.
 import { makePointLayer } from './lib/point-layer.js';
 import { ICONS } from './lib/icons.js';
-import { overpass, where, tagRows } from './lib/overpass.js';
-
-const SRC = { nuclear: '#b04dff', coal: '#8b97a5', gas: '#ff8a3d', oil: '#a0785a', hydro: '#3d7bff', wind: '#7fd8ff', solar: '#ffd34d', biomass: '#3ee67a', geothermal: '#ff4d5e' };
+import { loadPlants, plantItems, PLANTS_CREDIT } from './lib/plants.js';
 
 export default makePointLayer({
   id: 'powerPlants',
@@ -12,17 +11,10 @@ export default makePointLayer({
   color: '#ffd34d',
   icon: ICONS.bolt,
   label: 'P',
-  view: { maxKm: 1500, radiusKm: 150 },
-  attribution: 'Power plants: © OpenStreetMap contributors (ODbL), via Overpass API',
-  fetch: (ctx, q) => overpass(ctx, q, ['nwr["power"="plant"]'], 500),
-  parse: (j) => (j.elements || []).map((el) => {
-    const t = el.tags || {};
-    const src = (t['plant:source'] || '').split(';')[0];
-    return {
-      key: `${el.type}${el.id}`, ...where(el), color: SRC[src] || '#ffd34d', label: (src[0] || 'P').toUpperCase(),
-      title: t.name || 'Power plant', subtitle: src ? `${src} power plant` : 'Power plant',
-      rows: tagRows(t, [['plant:source', 'Source'], ['plant:output:electricity', 'Output'], ['operator', 'Operator'], ['start_date', 'Opened']]),
-      link: { href: `https://www.openstreetmap.org/${el.type}/${el.id}`, text: 'OpenStreetMap' },
-    };
-  }),
+  max: 700,
+  view: { maxKm: 4000, radiusKm: 600 },
+  attribution: `Power plants: ${PLANTS_CREDIT}`,
+  fetch: (ctx) => loadPlants(ctx),
+  parse: (d, ctx, q) => plantItems(d, q, null),
+  note: () => 'N nuclear · C coal · G gas · H hydro · W wind · S solar. A 2021 list: newer plants are missing.',
 });
