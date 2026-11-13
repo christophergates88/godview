@@ -94,6 +94,16 @@ import cables from './cables.js';
 import radio from './radio.js';
 import wikipedia from './wikipedia.js';
 import inaturalist from './inaturalist.js';
+// People & records (organizations, public roles, aggregates only; see lib/privacy.js)
+import peopleOfficials from './people-officials.js';
+import peopleCensus from './people-census.js';
+import peopleNotable from './people-notable.js';
+import peopleMoney from './people-money.js';
+import peopleEpa from './people-epa.js';
+import peopleCare from './people-care.js';
+import peopleBanks from './people-banks.js';
+import peopleFema from './people-fema.js';
+import peopleMissing from './people-missing.js';
 
 export const LAYERS = [
   flights, military, emergency, airportDelays, airports,
@@ -103,4 +113,6 @@ export const LAYERS = [
   earthquakes, events, firePerimeters, fireIncidents, firms, volcanoes, rivers, drought,
   ga511Cameras, ga511Events, caltrans, amtrak, bikeshare, powerPlants, nuclear, alpr, cellTowers, cables,
   radio, wikipedia, inaturalist,
+  // People & records
+  peopleOfficials, peopleCensus, peopleNotable, peopleMoney, peopleEpa, peopleCare, peopleBanks, peopleFema, peopleMissing,
 ];
