@@ -134,6 +134,48 @@ is switched on, and you get back a list of `{ id, name, ok, count, ms, via, erro
 It finishes within 60 seconds, draws nothing and changes no settings (it may
 save downloaded data in the cache, as normal use does).
 
+## Watch, Brief, Remember (the watch service)
+
+GodView can keep watching your places while the app is closed. A small
+Cloudflare Worker (`server/watch/worker.js`) checks every 5 minutes, sends phone
+alerts through the ntfy app, writes a morning brief at 6:15 (New York time,
+daylight saving handled), and keeps a short history per place.
+
+**Set it up (once, on the Mac):** copy the `server` folder's contents to
+Documents › GodView, then double-click **Deploy GodView Watch**. It prints
+(a) the ntfy topic to subscribe to on your iPhone and (b) a setup link to open
+once on each device. The link stores the key in that browser and is removed
+from the address bar. Run it again any time; it only updates.
+
+**In the app:** the bell button opens **Places** (big tiles: all clear /
+heads-up / act now), **Alerts** (mark done, clear all) and **Brief**. Tap a place
+for its 30-day timeline and "normal vs now". Add places by search, by tapping
+the globe, or with your location. If the service is not set up, the map still
+works and the screen says what to do.
+
+**What it checks per place:** NWS alerts at the point (new, updated, ended),
+SPC storm reports in the radius, earthquakes (by size and distance), wildfires
+within 25+ miles and whether they are getting closer, river gauges reaching
+action/flood stage, aircraft emergency codes within 25 miles, military aircraft
+low nearby and aircraft staying low overhead (a guess from position only),
+hurricane forecast cones, air quality (modelled), aurora chance after dark,
+visible Space Station passes (approximate, ±2 min) and rocket launches that may
+be visible. Which checks run depends on the place kind (home, family, property,
+route, client).
+
+**Alerts:** "act now" always notifies; "heads-up" notifies except in quiet hours
+(10 PM–6 AM), when it waits for the morning brief; "info" only goes in the brief.
+Nothing repeats. Places live only in your own Cloudflare storage, never in this
+code. If a Keychain item `godview-anthropic` exists, Claude (model
+`claude-haiku-5-5`) words the brief using only the facts; otherwise the brief is
+rule-based.
+
+**Tests:** `node server/watch/test/run.mjs` (worker logic with mocked sources and
+storage) and `bash server/test/deploy-mock.sh fresh` (deploy script against a fake
+Keychain and a fake Cloudflare API). In the browser console on the live site,
+`await GodView.watchSelfTest()` runs every watch check once for a public test
+point (Georgia State Capitol) without sending alerts or saving anything.
+
 ## Settings (all stored only in this browser)
 Units, start location (default: Georgia, USA), API keys (Georgia 511, NASA
 FIRMS), data relay, earthquake feed, event window, refresh intervals (with

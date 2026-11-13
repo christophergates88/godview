@@ -8,6 +8,11 @@ for (const [k, v] of Object.entries(THEME)) {
   root.style.setProperty('--gv-' + k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase()), v);
 }
 
+// A setup link (#watch=<key>@<host>) must not stay in the address bar or the
+// history: read it and remove it straight away, before anything else loads.
+window.__gvHash = location.hash || '';
+if (window.__gvHash) history.replaceState(null, '', location.pathname + location.search);
+
 const boot = document.getElementById('boot');
 const bootMsg = (t) => { const s = boot && boot.querySelector('span'); if (s) s.textContent = t; };
 

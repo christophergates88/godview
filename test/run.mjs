@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import * as F from './fixtures.mjs';
 import { answerPeople } from './fixtures-people.mjs'; // People & records sample data
+import * as W from '../server/watch/worker.js';
+import { KV as WatchKV, makeFetch as watchFetch } from '../server/watch/test/mocks.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(here, '..');
@@ -49,6 +51,7 @@ const results = [];
 const check = (name, ok, extra = '') => { results.push({ name, ok, extra }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  — ' + extra : ''}`); };
 
 // What each data host answers in the tests (sample data, see fixtures.mjs).
+const WATCH_HOST = 'godview-watch.testsub.workers.dev';
 const RELAY_ONLY = new Set(['api.adsb.lol', 'opensky-network.org', 'api.airplanes.live', 'opendata.adsb.fi', 'nasstatus.faa.gov', 'www.ndbc.noaa.gov', 'www.nhc.noaa.gov', 'droughtmonitor.unl.edu', 'www.submarinecablemap.com', '511ga.org', 'www.missingkids.org']);
 function answer(u, mode) {
   const host = u.hostname; const p = u.pathname;
@@ -121,6 +124,14 @@ async function setupRoutes(context, mode = {}) {
       const file = path.join(NM, m[1], m[2]);
       if (!fs.existsSync(file)) return route.fulfill({ status: 404, body: 'missing ' + file });
       return route.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' }, body: fs.readFileSync(file) });
+    }
+    if (host === WATCH_HOST && mode.watchEnv) {  // the watch service: real worker code, mocked sources
+      const r = route.request();
+      const req = new Request(url, { method: r.method(), headers: { ...r.headers(), origin: 'https://christophergates88.github.io' }, body: ['POST', 'PUT'].includes(r.method()) ? r.postData() : undefined });
+      const resp = await W.handle(req, mode.watchEnv, watchFetch({ now: Date.now() }));
+      const hdr = Object.fromEntries(resp.headers.entries());
+      hdr['access-control-allow-origin'] = '*'; // test page runs on 127.0.0.1; real CORS rules are unit-tested in server/watch/test
+      return route.fulfill({ status: resp.status, headers: hdr, body: await resp.text() });
     }
     let target = u;
     if (/workers\.dev$/.test(host)) {           // the data relay
@@ -459,6 +470,111 @@ async function screenPos(page, layer, key) {
   check('narrow pane: full layer panel is one tap away (Layers chip)', open);
   await page.screenshot({ path: path.join(outDir, 'narrow-panel-open.png') });
   await context.close();
+}
+
+// ------------------------------------------------------------ scenario 5: watch service (setup link, places, alerts, brief, timeline)
+{
+  const watchEnv = { KV: new WatchKV(), WATCH_TOKEN: 'k'.repeat(48), NTFY_TOPIC: 'gv-test' };
+  const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
+  const context = await browser.newContext(iphone);
+  await setupRoutes(context, { watchEnv });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(BASE + '#watch=' + 'k'.repeat(48) + '@' + WATCH_HOST, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  const st = await page.evaluate(() => ({ hash: location.hash, saved: localStorage.getItem('godview.watch.v1'), open: !document.getElementById('watch').hidden, conn: document.querySelector('.w-conn')?.innerText || '' }));
+  check('setup link: key saved, hash removed, Watch opens connected', st.hash === '' && /testsub/.test(st.saved || '') && st.open && /Watching/.test(st.conn), JSON.stringify(st).slice(0, 200));
+  // Add a place by search
+  await page.click('#w-add');
+  await page.fill('#wf-name', 'Test Home');
+  await page.fill('#wf-q', 'Atlanta');
+  await page.click('#wf-go');
+  await page.waitForTimeout(600);
+  await page.click('.w-pick');
+  await page.waitForTimeout(200);
+  await page.click('#wf-save');
+  await page.waitForTimeout(800);
+  const cfg = JSON.parse(watchEnv.KV.m.get('cfg') || '{}');
+  check('add place by search saves it to the watch service', cfg.places?.length === 1 && cfg.places[0].name === 'Test Home' && Math.abs(cfg.places[0].lat - 33.749) < 0.01, JSON.stringify(cfg.places));
+  // Add a second place by tapping the globe
+  await page.click('#wd-back');
+  await page.click('#w-add');
+  await page.fill('#wf-name', 'Test Tap');
+  await page.click('#wf-tap');
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.GodView.layers.forEach((l) => window.GodView.manager.enable(l.id, false)));
+  await page.waitForTimeout(300);
+  await page.touchscreen.tap(195, 420);
+  await page.waitForTimeout(500);
+  await page.click('#wf-save');
+  await page.waitForTimeout(800);
+  const cfg2 = JSON.parse(watchEnv.KV.m.get('cfg') || '{}');
+  check('add place by tapping the globe', cfg2.places?.length === 2 && cfg2.places.some((p) => p.name === 'Test Tap'), JSON.stringify(cfg2.places?.map((p) => p.name)));
+  // A cron run produces events; tiles show status
+  await W.runAll(watchEnv, new Date(), watchFetch({ now: Date.now() }));
+  await page.click('#wd-back');
+  await page.click('#watch-tabs button[data-tab="places"]');
+  await page.waitForTimeout(800);
+  const tiles = await page.evaluate(() => [...document.querySelectorAll('.tile[data-id]')].map((t) => t.className + ' ' + t.innerText.replace(/\s+/g, ' ')));
+  check('place tiles show status at a glance', tiles.length === 2 && tiles.some((t) => /act/.test(t) && /act now/i.test(t)), tiles.join(' | '));
+  await page.screenshot({ path: path.join(outDir, 'watch-places.png') });
+  // Detail with timeline
+  await page.click('.tile[data-id]');
+  await page.waitForTimeout(800);
+  const det = await page.evaluate(() => ({ bars: document.querySelectorAll('.bar').length, events: document.querySelectorAll('#wd-events .evt').length, note: document.querySelector('.w-detail, #w-detail')?.innerText.includes('history') }));
+  check('place detail: 30-day timeline with today\'s events and history note', det.bars === 30 && det.events > 0 && det.note, JSON.stringify(det));
+  await page.screenshot({ path: path.join(outDir, 'watch-detail.png') });
+  await page.evaluate(() => { const r = document.getElementById('wd-scrub'); r.value = '10'; r.dispatchEvent(new Event('input')); });
+  const empty = await page.evaluate(() => document.getElementById('wd-events').innerText);
+  check('timeline scrubber switches days', /Nothing happened/.test(empty));
+  // Alerts inbox
+  await page.click('#watch-tabs button[data-tab="alerts"]');
+  await page.waitForTimeout(800);
+  const nOpen = await page.evaluate(() => document.querySelectorAll('#w-alerts .evt:not(.done)').length);
+  await page.click('#w-alerts [data-done]');
+  await page.waitForTimeout(500);
+  const handled = Object.keys(JSON.parse(watchEnv.KV.m.get('cfg')).places).length && JSON.parse(watchEnv.KV.m.get('log:' + cfg.places[0].id) || '[]').concat(JSON.parse(watchEnv.KV.m.get('log:' + cfg2.places[1].id) || '[]')).filter((e) => e.handled).length;
+  check('alerts inbox lists events and "Done" clears one', nOpen > 3 && handled === 1, `open=${nOpen} handled=${handled}`);
+  await page.screenshot({ path: path.join(outDir, 'watch-alerts.png') });
+  await page.click('#wa-all');
+  await page.waitForTimeout(700);
+  const left = await page.evaluate(() => document.querySelectorAll('#w-alerts .evt:not(.done)').length);
+  check('"Clear all" marks everything handled', left === 0);
+  // Brief
+  await page.click('#watch-tabs button[data-tab="brief"]');
+  await page.waitForTimeout(600);
+  await page.click('#wb-now');
+  await page.waitForTimeout(1500);
+  const brief = await page.evaluate(() => document.getElementById('w-brief').innerText);
+  check('Brief tab: "Brief me now" shows the brief with do-lines and history', /Test Home/.test(brief) && /history|No history/.test(brief), brief.replace(/\s+/g, ' ').slice(0, 200));
+  await page.screenshot({ path: path.join(outDir, 'watch-brief.png') });
+  await page.click('#watch-close');
+  // watchSelfTest and What's here with the server check
+  const wst = await page.evaluate(() => window.GodView.watchSelfTest());
+  check('GodView.watchSelfTest() returns per-check results', wst.checks.length === 12 && wst.checks.every((c) => c.ok), JSON.stringify(wst.checks.map((c) => c.id + ':' + c.ok)));
+  await page.click('#btn-brief');
+  await page.waitForTimeout(2500);
+  const wh = await page.evaluate(() => document.getElementById('card-brief').innerText);
+  check("What's here includes the watch service's check for the point", /Watch check/i.test(wh), wh.slice(0, 200).replace(/\s+/g, ' '));
+  const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource/.test(e));
+  check('[watch] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
+  await context.close();
+
+  // Not set up: the viewer works and the screen says what to do
+  const c2 = await browser.newContext(iphone);
+  await setupRoutes(c2, {});
+  const p2 = await c2.newPage();
+  await p2.goto(BASE, { waitUntil: 'load' });
+  await p2.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await p2.click('#btn-watch');
+  await p2.waitForTimeout(300);
+  const msg = await p2.evaluate(() => document.getElementById('watch-body').innerText);
+  check('not set up: plain instructions shown, map still works', /Not set up yet/.test(msg) && /Deploy GodView Watch/.test(msg) && await p2.evaluate(() => window.GodView.manager.state.earthquakes.enabled), msg.slice(0, 120));
+  await p2.screenshot({ path: path.join(outDir, 'watch-not-set-up.png') });
+  await c2.close();
 }
 
 await browser.close();
