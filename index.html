@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#07090c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GodView">
+  <title>GodView</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <!-- The globe library (CesiumJS) is loaded by js/main.js; its version is set in js/config.js -->
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-viewstyle="normal">
+  <div id="globe" aria-label="3D globe"></div>
+  <div id="crt-overlay" aria-hidden="true"></div>
+
+  <header id="topbar">
+    <div class="brand" aria-hidden="true">GODVIEW</div>
+    <form id="search" role="search" autocomplete="off">
+      <svg class="search-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <input id="search-input" type="search" inputmode="search" enterkeyhint="search" placeholder="Search a place or lat, lon" aria-label="Search places">
+    </form>
+    <button id="btn-locate" class="icon-btn" aria-label="Go to my location" title="My location">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button id="btn-settings" class="icon-btn" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="8" cy="17" r="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>
+    </button>
+    <div id="search-results" class="results" hidden></div>
+  </header>
+
+  <div id="hud" aria-live="off"></div>
+
+  <!-- Layer controls: bottom sheet on phones, side panel on desktop -->
+  <section id="sheet" class="sheet" data-state="peek" aria-label="Layers">
+    <button class="sheet-handle" id="sheet-handle" aria-label="Show or hide layer details"><span></span></button>
+    <div id="chips" class="chips"></div>
+    <div class="sheet-body">
+      <h2 class="sec-title">Layers</h2>
+      <div id="layer-list" class="layer-list"></div>
+      <h2 class="sec-title">View</h2>
+      <div id="style-seg" class="seg" role="group" aria-label="View style"></div>
+      <h2 class="sec-title">Base map</h2>
+      <div id="basemap-seg" class="seg" role="group" aria-label="Base map"></div>
+    </div>
+  </section>
+
+  <div id="credits" class="credits" aria-label="Map credits"></div>
+
+  <!-- Detail card for a tapped object -->
+  <section id="card" class="card" hidden aria-live="polite">
+    <div class="card-head">
+      <div class="card-titles">
+        <div id="card-kicker" class="kicker"></div>
+        <h3 id="card-title"></h3>
+        <div id="card-sub" class="sub"></div>
+      </div>
+      <button id="card-close" class="icon-btn small" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <dl id="card-rows" class="rows"></dl>
+    <p id="card-text" class="card-text" hidden></p>
+    <div class="card-actions">
+      <button id="card-follow" class="btn primary" hidden>Follow</button>
+      <button id="card-fly" class="btn">Fly to</button>
+      <a id="card-link" class="btn" target="_blank" rel="noopener" hidden>Source</a>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="settings" class="modal" hidden aria-label="Settings">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button id="settings-close" class="icon-btn small" aria-label="Close settings">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div id="settings-body" class="modal-body"></div>
+    </div>
+  </section>
+
+  <div id="toast" role="status" hidden></div>
+  <div id="boot" class="boot">GODVIEW <span>starting…</span></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
