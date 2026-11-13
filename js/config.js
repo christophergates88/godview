@@ -4,7 +4,7 @@
 
 export const APP = {
   name: 'GodView',
-  version: '7.0.0',
+  version: '8.0.0',
 };
 
 // Libraries (pinned versions, loaded from the jsDelivr CDN).
@@ -103,6 +103,15 @@ export const ENDPOINTS = {
     '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=2&wind_speed_unit=kmh&timezone=auto',
   nwsPoint: 'https://api.weather.gov/alerts/active?point={lat},{lon}',
+  // Drive mode: weather where you are, with rain timing (15-minute steps, next 2 hours) and visibility (fog)
+  driveWeather: 'https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}' +
+    '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,visibility,precipitation,is_day' +
+    '&minutely_15=precipitation&forecast_minutely_15=8&daily=sunrise,sunset&forecast_days=2&wind_speed_unit=kmh&timezone=auto',
+  reverseRoad: 'https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&zoom=17&format=jsonv2',
+  // Drive mode animal scan: Google MediaPipe (Apache 2.0), runs on the phone; files are cached after the first download
+  mediapipeVision: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3',
+  animalModel: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float16/1/efficientdet_lite2.tflite',
+  animalModelFast: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',
   reverseGeocode: 'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat}&longitude={lon}&localityLanguage=en',
   openmhzSystems: 'https://api.openmhz.com/systems',
   openmhzCalls: 'https://api.openmhz.com/{system}/calls',
@@ -240,16 +249,18 @@ export const NET = {
 // Colour theme. These become CSS variables (--gv-bg, --gv-accent, ...) at start-up,
 // so the whole look can be changed here.
 export const THEME = {
-  bg: '#07090c',
-  panel: 'rgba(12, 16, 21, 0.92)',
-  panelSolid: '#0c1015',
-  line: 'rgba(255, 255, 255, 0.10)',
-  text: '#e8edf2',
-  muted: '#8b97a5',
-  accent: '#3ee6c4',
-  warn: '#ffb020',
-  bad: '#ff4d5e',
-  good: '#3ee67a',
+  bg: '#05080f',
+  panel: 'rgba(11, 17, 32, 0.86)',
+  panelSolid: '#0b1120',
+  line: 'rgba(148, 170, 255, 0.13)',
+  text: '#e8eefb',
+  muted: '#8d99b3',
+  accent: '#7aa5ff',      // links, icons, highlights on dark
+  accentA: '#3a68f5',     // filled buttons: a blue-to-violet gradient (white text passes contrast)
+  accentB: '#6c45f0',
+  warn: '#ffb547',
+  bad: '#ff5470',
+  good: '#3ddc97',        // only for "all clear" / "working" dots, never big fills
   radius: '14px',
   font: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif',
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
@@ -263,7 +274,7 @@ export const COLORS = {
   quakes: '#ff5a36',
   fire: '#ff7a1a',
   event: '#c8a2ff',
-  me: '#3ee6c4',
+  me: '#7aa5ff',
 };
 
 // Aircraft details shown when you tap a plane (v4). Both allow direct browser

@@ -62,11 +62,12 @@ export function answer(u, mode) {
     case 'api.rainviewer.com': return J(F.rainviewer());
     case 'api.open-meteo.com': {
       const n = (u.searchParams.get('latitude') || '').split(',').length;
+      if (u.searchParams.get('minutely_15')) return J(F.driveWeather());
       return J(n > 1 ? F.openMeteoGrid(n) : F.openMeteo());
     }
     case 'air-quality-api.open-meteo.com': return J(F.openMeteoGrid((u.searchParams.get('latitude') || '').split(',').length));
     case 'geocoding-api.open-meteo.com': return J(u.searchParams.get('name') === 'zzzz' ? {} : F.geocode());
-    case 'nominatim.openstreetmap.org': return J(F.nominatim());
+    case 'nominatim.openstreetmap.org': return J(u.pathname.startsWith('/reverse') ? { address: { road: 'Sample Road' } } : F.nominatim());
     case 'api.adsb.lol':
       if (mode.flightsBlocked) return 'abort';
       if (p === '/v2/mil') return J(F.adsbMil());
@@ -194,7 +195,9 @@ export async function setupRoutes(context, mode = {}) {
 
 export const browser = await chromium.launch({
   executablePath: CHROME,
-  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'],
+  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl',
+    // Drive mode's animal scan: a fake camera (moving test picture) and no permission prompt
+    '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
 });
 
 export async function openApp(ctxOpts, mode, label) {

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
+      <stop offset="0" stop-color="#16245a"/>
+      <stop offset="0.5" stop-color="#0a1230"/>
+      <stop offset="1" stop-color="#03050c"/>
+    </radialGradient>
+    <linearGradient id="lid" x1="150" y1="512" x2="874" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4f8dff"/>
+      <stop offset="1" stop-color="#a06bff"/>
+    </linearGradient>
+    <radialGradient id="iris" cx="44%" cy="40%" r="70%">
+      <stop offset="0" stop-color="#2a56c9"/>
+      <stop offset="0.6" stop-color="#132a6b"/>
+      <stop offset="1" stop-color="#0a1538"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="irisClip"><circle cx="512" cy="512" r="132"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <!-- eyelids = orbit paths -->
+  <path d="M150 512 C330 226 694 226 874 512 C694 798 330 798 150 512 Z" fill="none" stroke="url(#lid)" stroke-width="78" stroke-linejoin="round"/>
+  <!-- iris = globe -->
+  <circle cx="512" cy="512" r="146" fill="url(#iris)" stroke="url(#lid)" stroke-width="44"/>
+  
+  <!-- satellite on the orbit -->
+  <circle cx="732" cy="365" r="74" fill="#0a1230"/>
+  <circle cx="732" cy="365" r="44" fill="#e9fbff" filter="url(#glow)"/>
+</svg>

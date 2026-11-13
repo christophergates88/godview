@@ -578,7 +578,7 @@ async function openBrief(lat, lon, label) {
   if (current && current.layer) M.select(null, null);
   stopAudio();
   current = { brief: { lat, lon } };
-  globe.setMarker('probe', lat, lon, '#3ee6c4');
+  globe.setMarker('probe', lat, lon, '#7aa5ff');
   fillCard({ kicker: "What's here", title: label, subtitle: fmt.latlon(lat, lon), rows: [] });
   $('card').classList.add('brief');
   $('card-follow').hidden = true;
@@ -709,7 +709,7 @@ function locate(onOk) {
 
 function initLocate() {
   $('btn-locate').addEventListener('click', () => locate((lat, lon) => {
-    globe.setMarker('me', lat, lon, '#3ee6c4');
+    globe.setMarker('me', lat, lon, '#7aa5ff');
     globe.flyTo(lat, lon, 40);
   }));
 }

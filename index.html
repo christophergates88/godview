@@ -3,14 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#07090c">
+  <meta name="theme-color" content="#05080f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GodView">
   <title>GodView</title>
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <!-- The globe library (CesiumJS) is loaded by js/main.js; its version is set in js/config.js -->
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -28,7 +30,7 @@
   </main>
 
   <header id="topbar">
-    <div class="brand" aria-hidden="true">GODVIEW</div>
+    <div class="brand" aria-hidden="true"><svg class="gv-mark" viewBox="120 196 784 632" aria-hidden="true"><defs><linearGradient id="gvm-a" x1="150" y1="512" x2="874" y2="512" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4f8dff"/><stop offset="1" stop-color="#a06bff"/></linearGradient></defs><path d="M150 512C330 226 694 226 874 512C694 798 330 798 150 512Z" fill="none" stroke="url(#gvm-a)" stroke-width="50" stroke-linejoin="round"/><circle cx="512" cy="512" r="146" fill="#132a6b" stroke="url(#gvm-a)" stroke-width="30"/><g fill="none" stroke="#8fb8ff" stroke-width="20"><ellipse cx="512" cy="512" rx="58" ry="132"/><path d="M366 512H658"/></g><circle cx="732" cy="365" r="54" fill="#05080f"/><circle cx="732" cy="365" r="30" fill="#e9fbff"/></svg>GODVIEW</div>
     <form id="search" role="search" autocomplete="off">
       <svg class="search-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
       <input id="search-input" type="search" inputmode="search" enterkeyhint="search" placeholder="Search places or lat, lon" aria-label="Search places">
@@ -202,7 +204,7 @@
   </nav>
 
   <div id="toast" role="status" hidden></div>
-  <div id="boot" class="boot">GODVIEW <span>starting…</span></div>
+  <div id="boot" class="boot"><svg class="gv-mark" viewBox="120 196 784 632" aria-hidden="true"><defs><linearGradient id="gvm-b" x1="150" y1="512" x2="874" y2="512" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4f8dff"/><stop offset="1" stop-color="#a06bff"/></linearGradient></defs><path d="M150 512C330 226 694 226 874 512C694 798 330 798 150 512Z" fill="none" stroke="url(#gvm-b)" stroke-width="50" stroke-linejoin="round"/><circle cx="512" cy="512" r="146" fill="#132a6b" stroke="url(#gvm-b)" stroke-width="30"/><g fill="none" stroke="#8fb8ff" stroke-width="20"><ellipse cx="512" cy="512" rx="58" ry="132"/><path d="M366 512H658"/></g><circle cx="732" cy="365" r="54" fill="#05080f"/><circle cx="732" cy="365" r="30" fill="#e9fbff"/></svg>GODVIEW <span>starting…</span></div>
 
   <script type="module" src="js/main.js"></script>
 </body>

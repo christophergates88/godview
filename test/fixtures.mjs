@@ -178,6 +178,11 @@ export const gbfsInfo = () => ({ data: { stations: [{ station_id: 's1', name: 'S
 export const gbfsStatus = () => ({ data: { stations: [{ station_id: 's1', num_bikes_available: 4, num_ebikes_available: 1, num_docks_available: 11 }, { station_id: 's2', num_bikes_available: 0, num_docks_available: 11 }] } });
 export const overpass = (q) => {
   const els = [];
+  // Drive mode: the road you're on (an east-west interstate through the sample area, with a limit)
+  if (/highway/.test(q)) {
+    els.push({ type: 'way', id: 404, tags: { highway: 'motorway', ref: 'I 16', name: 'Sample Parkway', maxspeed: '70 mph' }, geometry: [{ lat: 32.8001, lon: -83.75 }, { lat: 32.8001, lon: -83.65 }, { lat: 32.8001, lon: -83.50 }] });
+    els.push({ type: 'way', id: 405, tags: { highway: 'secondary', ref: 'SR 87', name: 'Crossing Road', maxspeed: '45 mph' }, geometry: [{ lat: 32.75, lon: -83.6302 }, { lat: 32.85, lon: -83.6302 }] });
+  }
   if (/power/.test(q)) els.push({ type: 'way', id: 101, center: { lat: 32.60, lon: -84.04 }, tags: { power: 'plant', name: 'Plant Sample', 'plant:source': /nuclear/.test(q) ? 'nuclear' : 'coal', operator: 'Sample Power', 'plant:output:electricity': '1000 MW' } });
   if (/ALPR/.test(q)) els.push({ type: 'node', id: 202, lat: 32.86, lon: -83.61, tags: { 'surveillance:type': 'ALPR', manufacturer: 'Flock Safety', direction: '90' } });
   if (/communication/.test(q)) els.push({ type: 'node', id: 303, lat: 32.84, lon: -83.65, tags: { 'tower:type': 'communication', operator: 'Sample Towers' } });
@@ -336,3 +341,17 @@ export const newsRss = (q) => `<?xml version="1.0" encoding="UTF-8"?><rss versio
 export const bingRss = () => `<?xml version="1.0" encoding="utf-8" ?><rss version="2.0" xmlns:News="https://www.bing.com/news/search?q=sample&amp;format=rss"><channel><title>Sample - BingNews</title>
 <item><title>Bing sample: county fair opens</title><link>http://www.bing.com/news/apiclick.aspx?url=https%3a%2f%2fpaper.example%2fstory</link><description>Sample.</description><pubDate>${new Date(now - 3 * 3600e3).toUTCString()}</pubDate><News:Source>Sample Paper</News:Source></item>
 </channel></rss>`;
+
+// ---------------------------------------------------------------- v8: Drive mode weather (rain timing in 15-minute steps, visibility)
+export const driveWeather = () => {
+  const off = -5 * 3600;   // America/New_York in November
+  const slot0 = Math.floor(now / 900e3) * 900e3;
+  const local = (ms) => new Date(ms + off * 1000).toISOString().slice(0, 16);
+  return {
+    latitude: 32.8, longitude: -83.6, timezone: 'America/New_York', utc_offset_seconds: off,
+    current: { time: local(slot0), interval: 900, temperature_2m: 12.0, apparent_temperature: 10.5, weather_code: 45, wind_speed_10m: 9.0, wind_gusts_10m: 18.0, visibility: 1200, precipitation: 0, is_day: 1 },
+    minutely_15: { time: Array.from({ length: 8 }, (_, i) => local(slot0 + i * 900e3)), precipitation: [0, 0, 0.6, 1.2, 0.8, 0.2, 0, 0] },
+    daily: { time: [local(now).slice(0, 10)], sunrise: [local(now - 6 * 3600e3)], sunset: [local(now + 40 * 60e3)] },
+  };
+};
+

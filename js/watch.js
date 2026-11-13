@@ -307,7 +307,7 @@ async function renderDetail() {
   $('wd-back').addEventListener('click', () => { detailId = null; render(); });
   $('wd-report').addEventListener('click', () => { presetPoint({ lat: p.lat, lon: p.lon, name: p.name }); open('reports'); });
   wireCams(p);
-  $('wd-fly').addEventListener('click', () => { close(); globe.flyTo(p.lat, p.lon, Math.max(30, p.radiusKm * 3)); globe.setMarker('place', p.lat, p.lon, '#3ee6c4'); });
+  $('wd-fly').addEventListener('click', () => { close(); globe.flyTo(p.lat, p.lon, Math.max(30, p.radiusKm * 3)); globe.setMarker('place', p.lat, p.lon, '#7aa5ff'); });
   $('wd-edit').addEventListener('click', () => addForm(p));
   $('wd-del').addEventListener('click', async () => {
     if (!(await ask({ title: `Stop watching ${p.name}?`, text: 'Its alerts stop. Its history is kept for now.', ok: 'Stop watching', danger: true }))) return;

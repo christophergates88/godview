@@ -5,7 +5,7 @@
 const I = (d) => `<svg viewBox="0 0 24 24"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 export const MODES = [
-  { id: 'around', name: 'Around me', color: '#3ee6c4', fly: true, icon: I('M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12zM12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'),
+  { id: 'around', name: 'Around me', color: '#7aa5ff', fly: true, icon: I('M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12zM12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'),
     layers: ['flights', 'alerts', 'radar', 'earthquakes', 'fireIncidents', 'rivers', 'satStations', 'daynight', 'ga511Events'] },
   { id: 'sky', name: 'Sky', color: '#6fb7ff', icon: I('M2.5 12.5l8-2 6-7 2 1-3 7 5 1.5 1-1 1 1-1 3-3-1-2 1-1-1 1-1.5-6-1.5-6 2z'),
     layers: ['flights', 'military', 'emergency', 'satStations', 'satellites', 'launches', 'aurora', 'daynight'] },
@@ -13,7 +13,7 @@ export const MODES = [
     layers: ['radar', 'alerts', 'spcReports', 'spcOutlook', 'hurricanes', 'tempGrid', 'rivers'] },
   { id: 'hazards', name: 'Hazards', color: '#ff4d5e', icon: I('M12 3l10 18H2L12 3zM12 10v5M12 18v.01'),
     layers: ['earthquakes', 'events', 'firePerimeters', 'fireIncidents', 'firms', 'volcanoes', 'rivers', 'alerts', 'airQuality'] },
-  { id: 'roads', name: 'Roads', color: '#c6ff4a', icon: I('M8 3L4 21M16 3l4 18M12 4v3M12 10v3M12 16v4'),
+  { id: 'roads', name: 'Roads', color: '#ff9a4d', icon: I('M8 3L4 21M16 3l4 18M12 4v3M12 10v3M12 16v4'),
     layers: ['ga511Cameras', 'ga511Events', 'caltrans', 'alpr', 'amtrak', 'bikeshare', 'alerts'] },
   { id: 'night', name: 'Night', color: '#b18cff', icon: I('M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z'),
     layers: ['gibsNight', 'satStations', 'satellites', 'aurora', 'daynight', 'launches'] },
@@ -22,7 +22,7 @@ export const MODES = [
 ];
 
 // Group colours, used in the full layer list.
-export const GROUP_COLORS = { air: '#6fb7ff', space: '#b18cff', sea: '#3ee6c4', weather: '#ffb020', hazards: '#ff4d5e', ground: '#c6ff4a', signals: '#ff7ad9' };
+export const GROUP_COLORS = { air: '#6fc8ff', space: '#b18cff', sea: '#2fd4c0', weather: '#ffb547', hazards: '#ff5470', ground: '#ff9a4d', signals: '#ff7ad9' };
 
 // Which layer ids a mode turns on (only layers that exist and have their key).
 // Layers whose only source is unreliable stay out of every mode (you can still

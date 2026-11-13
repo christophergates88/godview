@@ -222,8 +222,26 @@ is kept as `lookout/classic.html`).
   buttons (Drive mode, Map here, Scanner, News) and safety links (power outages,
   crime map, wildfires, county emergency info). The Now tab shows a dot when there
   is a warning.
-- **Drive mode:** the time, the weather, the most serious alert and the nearest road
-  problem in big type; it asks the phone to keep the screen on.
+- **Drive mode (v8):** a dark dashboard for the car that keeps the screen on.
+  Your speed and heading from GPS; the road you're on and its speed limit
+  (OpenStreetMap; the speed turns amber/red when you're well over); the weather
+  where you are now, with rain timing in 15-minute steps and fog (visibility);
+  weather alerts for where you are now, re-checked as you drive; Georgia 511
+  problems ahead of you (by direction of travel, marked "your road" when the road
+  numbers match); sunset and a deer-risk note (dawn/dusk, worse in the Oct-Dec rut).
+  New alerts, fog and problems within 5 miles ahead are spoken once (voice can be
+  turned off). Without location permission it uses the place picked on Now.
+- **Animal scan (in Drive mode):** the rear camera and an on-device detector
+  (Google MediaPipe, EfficientDet-Lite2 on the graphics chip, Lite0 on the CPU as
+  a fallback; COCO classes, so a deer shows as "animal") watch for large animals.
+  Two hits in three checks sound an alarm, show a red banner and say "Animal
+  ahead"; cats and birds are ignored on purpose (swerving for small animals causes
+  worse crashes). At night the picture is brightened for the detector and an
+  eyeshine check looks for two small matched dots (a softer "possible eyes" note
+  only). Pictures never leave the phone. The detector (~25 MB) downloads once and is
+  kept for offline use. It is a second pair of eyes, not a safety system: it misses
+  things, more so at night, in rain and at a distance. In the iPhone app the camera
+  needs the app rebuilt once (Documents › GodView › Install GodView on iPhone).
 - **Cams:** Georgia 511 traffic cameras and public webcams (Windy, from the Lookout
   feed job) near the place, nearest first, with filters. Tap for a full-screen
   viewer (swipe for the next; traffic cameras refresh every 10 s), "Show on map"

@@ -940,6 +940,136 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await c2.close();
 }
 
+
+// ------------------------------------------------------------ scenario 10 (v8): new look, Drive mode dashboard, animal scan
+{
+  const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true };
+  const place = { lat: 32.84, lon: -83.63, name: 'Sampleville', state: 'GA', county: 'Sample County', country: 'US', source: 'picked' };
+  const context = await browser.newContext({ ...iphone, permissions: ['camera'] });
+  await setupRoutes(context, { lookout: { openTo: 'now', place } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(BASE + '?tab=now', { waitUntil: 'load' });
+  await page.waitForFunction(() => document.querySelector('#lk-now .lk-hero'), null, { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  const look = await page.evaluate(async () => {
+    const cs = getComputedStyle(document.documentElement);
+    const hero = getComputedStyle(document.querySelector('#lk-now .lk-hero'));
+    const pill = getComputedStyle(document.querySelector('#tabbar [aria-current="page"]'), '::before');
+    const files = await Promise.all(['icons/apple-touch-icon.png', 'icons/favicon.svg', 'icons/icon-512.png', 'manifest.webmanifest'].map((f) => fetch(f).then((r) => `${r.status} ${r.headers.get('content-type')}`)));
+    return { accent: cs.getPropertyValue('--gv-accent').trim(), grad: cs.getPropertyValue('--gv-grad').trim().slice(0, 40), heroBg: hero.backgroundImage.slice(0, 160), pill: pill.backgroundImage.slice(0, 50), icon: document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href'), files, boot: !!document.querySelector('.brand .gv-mark') };
+  });
+  check('new look: blue/violet brand instead of green, lit tab pill, new logo files served', look.accent === '#7aa5ff' && /gradient/.test(look.grad) && !/rgb\(18, 61, 51\)|rgba?\(62, 230, 196/.test(look.heroBg) && /gradient/.test(look.pill) && /apple-touch-icon\.png/.test(look.icon) && look.files.every((f) => /^200/.test(f)) && look.boot, JSON.stringify(look));
+  await page.screenshot({ path: path.join(outDir, 'v8-now.png') });
+
+  // Unit checks that run in the page: road numbers, limits, the road you're on, deer risk, eyeshine
+  const unit = await page.evaluate(async () => {
+    const d = await import('./js/lookout/drive.js');
+    const m = await import('./js/lookout/eyeshine.js');
+    const W = 320; const H = 180;
+    const frame = (dots, bg = 12) => {
+      const a = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) { a[i * 4] = bg; a[i * 4 + 1] = bg; a[i * 4 + 2] = bg; a[i * 4 + 3] = 255; }
+      for (const [x, y, r, c] of dots) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { if (dx * dx + dy * dy > r * r) continue; const i = ((y + dy) * W + (x + dx)) * 4; a[i] = c[0]; a[i + 1] = c[1]; a[i + 2] = c[2]; }
+      return a;
+    };
+    const white = [235, 245, 225];
+    const t = new m.EyeTracker(3, 4); const pp = [{ x: 0.5, y: 0.6, dx: 0.02, d: 0.006, score: 1 }];
+    const cross = [{ tags: { ref: 'I 16', name: 'Sample Parkway', maxspeed: '70 mph' }, geometry: [{ lat: 32.8001, lon: -83.75 }, { lat: 32.8001, lon: -83.5 }] },
+      { tags: { ref: 'SR 87', name: 'Crossing Road', maxspeed: '45 mph' }, geometry: [{ lat: 32.75, lon: -83.6302 }, { lat: 32.85, lon: -83.6302 }] }];
+    const june = { rise: [Date.parse('2026-06-15T10:30:00Z')], set: [Date.parse('2026-06-16T00:40:00Z')] };
+    const nov = { rise: [Date.parse('2026-11-13T11:55:00Z')], set: [Date.parse('2026-11-13T22:33:00Z')] };
+    return {
+      keys: ['I 16', 'I-16', 'Interstate 16', 'GA 22', 'SR 22', 'US-441', 'US 441', 'Sample Parkway'].map(d.roadKey).join(','),
+      limits: [d.parseLimit('55 mph'), d.parseLimit('90'), d.parseLimit('none')].map((x) => (x ? x.mph : null)).join(','),
+      northAtCrossing: d.pickWay(cross, 32.8001, -83.6302, 0)?.ref,
+      eastAtCrossing: d.pickWay(cross, 32.8001, -83.6302, 90)?.ref,
+      deer: [d.deerRisk(new Date('2026-06-15T17:00:00Z'), june).label, d.deerRisk(new Date('2026-06-16T00:10:00Z'), june).label, d.deerRisk(new Date('2026-11-13T17:00:00Z'), nov).label, d.deerRisk(new Date('2026-11-13T03:00:00Z'), nov).why].join(','),
+      eyes: {
+        pair: m.findEyePairs(frame([[150, 110, 1, white], [156, 110, 1, white]]), W, H).length,
+        single: m.findEyePairs(frame([[150, 110, 1, white]]), W, H).length,
+        headlights: m.findEyePairs(frame([[120, 100, 9, [255, 255, 255]], [200, 100, 9, [255, 255, 255]]]), W, H).length,
+        red: m.findEyePairs(frame([[150, 110, 1, [250, 40, 40]], [156, 110, 1, [250, 40, 40]]]), W, H).length,
+        sky: m.findEyePairs(frame([[150, 15, 1, white], [156, 15, 1, white]]), W, H).length,
+        daylight: m.findEyePairs(frame([[150, 110, 1, white], [156, 110, 1, white]], 140), W, H).length,
+        confirm: [t.update(pp), t.update(pp), !!t.update(pp)].join(','),
+      },
+    };
+  });
+  check('drive: road numbers match across sources (I 16 = I-16, GA 22 = SR 22, US-441 = US 441)', unit.keys === 'I16,I16,I16,SR22,SR22,US441,US441,', unit.keys);
+  check('drive: speed limits read from OpenStreetMap (mph, km/h, none)', unit.limits === '55,56,', unit.limits);
+  check('drive: at an intersection the road you are heading along wins', unit.northAtCrossing === 'SR 87' && unit.eastAtCrossing === 'I 16', `${unit.northAtCrossing} / ${unit.eastAtCrossing}`);
+  check('drive: deer risk: June midday low, dusk high, November midday elevated (rut), night', unit.deer === 'Low,High,Elevated,after dark · fall rut', unit.deer);
+  check('eyeshine: a small matched pair is found; one dot, headlights, red lights, sky and daylight are not; 3 of 4 checks confirm',
+    unit.eyes.pair >= 1 && unit.eyes.single === 0 && unit.eyes.headlights === 0 && unit.eyes.red === 0 && unit.eyes.sky === 0 && unit.eyes.daylight === 0 && unit.eyes.confirm === ',,true', JSON.stringify(unit.eyes));
+
+  // Drive mode: driving east on I-16 toward the sample crash (GPS fixes fed in directly)
+  await page.evaluate(() => { navigator.geolocation.watchPosition = () => 1; navigator.geolocation.clearWatch = () => {}; });
+  await page.click('#nw-drive');
+  await page.waitForTimeout(800);
+  const T0 = Date.now();
+  await page.evaluate((t) => { GodViewDrive.fix(32.80, -83.660, { t }); GodViewDrive.fix(32.80, -83.6597, { t: t + 1000 }); }, T0);
+  await page.waitForFunction(() => /I 16/.test(document.getElementById('dv-road').textContent) && !document.getElementById('dv-limit').hidden, null, { timeout: 8000 }).catch(() => {});
+  await page.evaluate((t) => { GodViewDrive.fix(32.80, -83.630, { t: t + 101000 }); }, T0);
+  await page.waitForTimeout(1200);
+  const dv = await page.evaluate(() => ({
+    spd: Number(document.getElementById('dv-spd').textContent), head: document.getElementById('dv-head').textContent, road: document.getElementById('dv-road').textContent,
+    limit: document.getElementById('dv-lim').textContent, ahead: document.getElementById('dv-ahead').innerText, chips: document.getElementById('dv-chips').innerText,
+    alert: document.getElementById('dv-alert').innerText, spoken: GodViewDrive.state().spoken,
+  }));
+  check('drive: speed and heading from GPS', dv.spd >= 58 && dv.spd <= 66 && /E/.test(dv.head), `${dv.spd} ${dv.head}`);
+  check('drive: the road you are on and its speed limit', /I 16 · Sample Parkway/.test(dv.road) && dv.limit === '70', `${dv.road} | ${dv.limit}`);
+  check('drive: Georgia 511 problems ahead of you, with distance, marked on your road', /Ahead of you/i.test(dv.ahead) && /Crash · I-16/.test(dv.ahead) && /your road/.test(dv.ahead) && /mi/.test(dv.ahead), dv.ahead.replace(/\s+/g, ' '));
+  check('drive: weather where you are: fog, rain timing, deer risk at dusk, sunset', /Fog · visibility 0\.\d mi/.test(dv.chips) && /Rain in ~\d+ min/.test(dv.chips) && /Deer risk High · dusk · fall rut/.test(dv.chips) && /Sunset/.test(dv.chips), dv.chips.replace(/\s+/g, ' '));
+  check('drive: the weather alert for where you are', /Severe Thunderstorm Warning/.test(dv.alert), dv.alert.replace(/\s+/g, ' '));
+  check('drive: spoken: the alert, the fog and the crash ahead (once each)', dv.spoken.some((t) => /Heads-up\. Severe Thunderstorm Warning/.test(t)) && dv.spoken.some((t) => /^Fog\. Visibility under a mile/.test(t)) && dv.spoken.filter((t) => /Crash ahead on I 16, 5 miles/.test(t)).length === 1, JSON.stringify(dv.spoken));
+  await page.evaluate((t) => { GodViewDrive.fix(32.80, -83.62573, { t: t + 111000 }); GodViewDrive.fix(32.80, -83.62146, { t: t + 121000 }); }, T0);
+  await page.waitForTimeout(300);
+  const over = await page.evaluate(() => ({ spd: document.getElementById('dv-spd').textContent, cls: document.getElementById('dv-spd').className }));
+  check('drive: over the limit turns the speed amber or red', /warn|bad/.test(over.cls), JSON.stringify(over));
+  await page.screenshot({ path: path.join(outDir, 'v8-drive.png') });
+  // Voice off and on
+  await page.click('#dv-voice');
+  const voiceOff = await page.evaluate(() => document.getElementById('dv-voice').classList.contains('off'));
+  await page.click('#dv-voice');
+  const voiceOn = await page.evaluate(() => !document.getElementById('dv-voice').classList.contains('off'));
+  check('drive: voice can be switched off and on', voiceOff && voiceOn, `${voiceOff} ${voiceOn}`);
+
+  // Animal scan with the fake camera and a stand-in detector
+  await page.evaluate(() => { window.__fakeDetections = []; window.GV_TEST_DETECTOR = { detectForVideo: () => ({ detections: window.__fakeDetections }) }; });
+  await page.click('#dv-scan');
+  await page.waitForFunction(() => GodViewDrive.state().scan.phase === 'scanning', null, { timeout: 15000 }).catch(() => {});
+  const s1 = await page.evaluate(() => ({ phase: GodViewDrive.state().scan.phase, msg: GodViewDrive.state().scan.message, video: !!document.querySelector('#dv-cam video')?.srcObject, cam: !document.getElementById('dv-cam').hidden, btn: document.getElementById('dv-scan').innerText, note: document.getElementById('dv-note').textContent }));
+  check('animal scan: the rear camera starts, the road shows, and it says what it is (and is not)', s1.phase === 'scanning' && s1.video && s1.cam && /Stop animal scan/.test(s1.btn) && /not a safety system/.test(s1.note), JSON.stringify(s1).slice(0, 300));
+  await page.evaluate(() => { window.__fakeDetections = [{ categories: [{ categoryName: 'horse', score: 0.81 }], boundingBox: { originX: 270, originY: 170, width: 110, height: 80 } }]; });
+  await page.waitForFunction(() => !document.getElementById('dv-flash').hidden, null, { timeout: 6000 }).catch(() => {});
+  const s2 = await page.evaluate(() => ({ flash: document.getElementById('dv-flash').hidden ? '' : document.getElementById('dv-flash').innerText, spoken: GodViewDrive.state().spoken.slice(-3), boxes: GodViewDrive.state().scan.boxes.length }));
+  check('animal scan: a large animal sounds the alarm, says "Animal ahead" and is framed on screen', /animal ahead/i.test(s2.flash) && s2.spoken.some((t) => /Animal ahead/.test(t)) && s2.boxes >= 1, JSON.stringify(s2));
+  await page.screenshot({ path: path.join(outDir, 'v8-drive-scan.png') });
+  await page.evaluate(() => { window.__fakeDetections = [{ categories: [{ categoryName: 'cat', score: 0.9 }], boundingBox: { originX: 270, originY: 170, width: 60, height: 50 } }, { categories: [{ categoryName: 'bird', score: 0.95 }], boundingBox: { originX: 100, originY: 150, width: 40, height: 30 } }]; });
+  await page.waitForTimeout(800);
+  const small = await page.evaluate(() => GodViewDrive.state().scan.boxes.length);
+  check('animal scan: cats and birds are ignored (swerving for small animals is the bigger danger)', small === 0, String(small));
+  await page.evaluate(() => { window.__tracks = document.querySelector('#dv-cam video').srcObject.getTracks(); });
+  await page.click('#dv-scan');
+  await page.waitForTimeout(300);
+  const s4 = await page.evaluate(() => ({ on: GodViewDrive.state().scan.on, hidden: document.getElementById('dv-cam').hidden, ended: window.__tracks.every((t) => t.readyState === 'ended') }));
+  check('animal scan: Stop turns the camera off', !s4.on && s4.hidden && s4.ended, JSON.stringify(s4));
+  await page.evaluate(() => { navigator.mediaDevices.getUserMedia = () => Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' })); });
+  await page.click('#dv-scan');
+  await page.waitForTimeout(400);
+  const den = await page.evaluate(() => ({ note: document.getElementById('dv-note').textContent, pref: JSON.parse(localStorage.getItem('godview.drive.v1')).scan }));
+  check('animal scan: if the camera is blocked it says how to fix it, and does not keep retrying', /Install GodView on iPhone/.test(den.note) && den.pref === false, JSON.stringify(den).slice(0, 200));
+  await page.click('#d-done');
+  const closed = await page.evaluate(() => document.getElementById('drive').hidden);
+  check('drive: Done closes it', closed);
+  const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource|play\(\) request|NotAllowedError|NotSupportedError/.test(e));
+  check('[v8] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
+  await context.close();
+}
+
 await browser.close();
 server.close();
 const failed = results.filter((r) => !r.ok);

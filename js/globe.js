@@ -248,7 +248,7 @@ export function unfollow() {
 export function isFollowing() { return !!followProxy; }
 
 // ---------- Simple markers (my location, tapped point) ----------
-export function setMarker(name, lat, lon, color = '#3ee6c4') {
+export function setMarker(name, lat, lon, color = '#7aa5ff') {
   clearMarker(name);
   markerEntities[name] = viewer.entities.add({
     position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
