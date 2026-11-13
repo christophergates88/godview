@@ -93,17 +93,14 @@ export const PROVIDERS = [
 
 function fill(t, p) { return t.replace(/\{(\w+)\}/g, (_, k) => p[k]); }
 
-function withRelay(relay, url) {
-  if (!relay) return url;
-  return relay.includes('{url}') ? relay.replace('{url}', encodeURIComponent(url)) : relay + encodeURIComponent(url);
-}
-
 export default {
   id: 'flights',
   name: 'Flights',
   color: COLORS.flights,
   icon: '<svg viewBox="0 0 24 24"><path d="M12 2.5c.8 0 1.3.9 1.3 2v5l8 4.6v2l-8-2.4v4.6l2.4 1.8v1.6L12 20.8l-3.7.9v-1.6l2.4-1.8v-4.6l-8 2.4v-2l8-4.6v-5c0-1.1.5-2 1.3-2z" fill="currentColor"/></svg>',
   attribution: 'Flights: adsb.lol (ODbL), OpenSky Network or airplanes.live, community ADS-B receivers',
+  group: 'air',
+  defaultOn: true,
   followRange: 40000,
 
   init(ctx) {
@@ -112,35 +109,41 @@ export default {
 
   async fetch(ctx) {
     const v = ctx.view();
-    if (v.heightKm > MAX_VIEW_KM) {
+    if (v.heightKm > MAX_VIEW_KM && !ctx.test) {
       lastQuery = null;
       ctx.setNote('Zoom in closer to load flights');
       return { list: [], skipped: true };
     }
-    const relay = (ctx.settings.get('flightRelay') || '').trim();
     const order = [...PROVIDERS].sort((a, b) => (a.id === preferred ? -1 : b.id === preferred ? 1 : 0));
     const errors = [];
     for (const p of order) {
       try {
-        const j = await ctx.net.fetchJSON(withRelay(relay, p.url(v)), { timeoutMs: 12000 });
+        const j = await ctx.net.get(p.url(v), { timeoutMs: 12000 });
         const list = p.parse(j);
-        preferred = p.id;
-        blockedNoRelay = false;
-        lastQuery = { lat: v.lat, lon: v.lon, radiusKm: v.radiusKm, t: Date.now() };
-        ctx.setNote(`${p.name}${relay ? ' via relay' : ''} · area around view centre`);
+        if (!ctx.test) {
+          preferred = p.id;
+          blockedNoRelay = false;
+          lastQuery = { lat: v.lat, lon: v.lon, radiusKm: v.radiusKm, t: Date.now() };
+          ctx.setNote(`${p.name}${ctx.rec.via === 'relay' ? ' via relay' : ''} · area around view centre`);
+        }
         return { list, provider: p.name };
       } catch (e) {
         errors.push(`${p.name}: ${e.message}`);
-        if (e.kind === 'ratelimit') continue;
       }
     }
-    const allBlocked = errors.every((m) => /Blocked/.test(m));
+    const allBlocked = errors.every((m) => /Blocked|relay/.test(m));
     const err = new ctx.net.FeedError(allBlocked
-      ? 'All flight sources blocked by the browser. Add a relay in Settings.'
+      ? 'All flight sources blocked. Check Settings > Data relay.'
       : errors.join(' · '));
-    blockedNoRelay = allBlocked && !relay;
-    err.stop = blockedNoRelay; // no point retrying every minute if the browser blocks it
+    if (!ctx.test) blockedNoRelay = allBlocked;
+    err.stop = allBlocked; // no point retrying every minute if the browser blocks it
     throw err;
+  },
+
+  count(ctx, data) { return data.list.length; },
+
+  items() {
+    return [...flights.values()].map((f) => ({ key: f.key, lat: f.est?.lat ?? f.lat, lon: f.est?.lon ?? f.lon, altM: f.altM, onGround: f.onGround, title: f.callsign || String(f.key).toUpperCase(), type: f.type }));
   },
 
   render(ctx, data) {
@@ -217,7 +220,7 @@ export default {
     return moved && Date.now() - lastQuery.t > 15000; // never more often than every 15 s
   },
 
-  onSettingChange(ctx, k) { if (k === 'flightRelay') { preferred = null; blockedNoRelay = false; return true; } return false; },
+  onSettingChange(ctx, k) { if (k === 'dataRelay') { preferred = null; blockedNoRelay = false; return true; } return false; },
 
   onSelect(ctx, key) {
     selectedKey = key;

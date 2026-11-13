@@ -1,17 +1,30 @@
-// OPTIONAL. Not part of the app and not needed for anything except live flights.
+// GodView DATA RELAY (Cloudflare Worker). Not loaded by the app.
 //
-// Free flight-data sources do not let web pages call them directly (the browser
-// "CORS" rule). This tiny Cloudflare Worker (free plan is enough) fetches the
-// data for GodView and adds the header that lets the browser read it.
+// Some public, keyless feeds do not let web pages read them directly (the
+// browser "CORS" rule). This tiny worker fetches them for GodView and adds the
+// header that lets the browser read the answer. It is NOT an open proxy:
+//   - GET only
+//   - only https URLs on the hosts in ALLOWED_HOSTS
+//   - only answers pages from ALLOWED_ORIGIN
+// Keep ALLOWED_HOSTS in step with RELAY_HOSTS in js/config.js.
 //
-// Deploy: Cloudflare dashboard > Workers & Pages > Create > "Hello World" worker,
-// replace its code with this file, Deploy. Then in GodView Settings, set
-// "Relay URL" to:  https://<your-worker>.workers.dev/?url=
-//
-// It only forwards to the flight hosts listed below, so it cannot be abused as
-// a general proxy. Put your GitHub Pages address in ALLOWED_ORIGIN.
+// Deploy: Cloudflare dashboard > Workers & Pages > your worker > Edit code,
+// paste this file, Deploy. GodView Settings > Data relay = https://<worker>.workers.dev/?url=
 
-const ALLOWED_HOSTS = ['opensky-network.org', 'api.airplanes.live', 'api.adsb.lol', 'opendata.adsb.fi'];
+const ALLOWED_HOSTS = [
+  // flights
+  'api.adsb.lol', 'opensky-network.org', 'api.airplanes.live', 'opendata.adsb.fi',
+  // added in GodView v2
+  'nasstatus.faa.gov',            // FAA airport delays
+  'www.ndbc.noaa.gov',            // ocean buoys
+  'www.nhc.noaa.gov',             // hurricanes
+  'droughtmonitor.unl.edu',       // drought map
+  'www.submarinecablemap.com',    // submarine cables
+  '511ga.org',                    // Georgia 511 (owner's key passes through in the URL)
+  'services3.arcgis.com',         // NIFC wildfires (fallback only)
+  'firms.modaps.eosdis.nasa.gov', // NASA FIRMS (fallback only)
+  'overpass-api.de',              // OpenStreetMap Overpass (fallback only)
+];
 const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 
 export default {
@@ -22,6 +35,7 @@ export default {
       'Vary': 'Origin',
     };
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+    if (request.method !== 'GET') return new Response('GET only', { status: 405, headers: cors });
     const target = new URL(request.url).searchParams.get('url');
     let url;
     try { url = new URL(target); } catch { return new Response('Bad url', { status: 400, headers: cors }); }

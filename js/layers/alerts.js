@@ -27,9 +27,18 @@ export default {
   color: '#ff7a1a',
   icon: '<svg viewBox="0 0 24 24"><path d="M12 3l10 18H2L12 3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
   attribution: 'US weather alerts: NOAA National Weather Service (api.weather.gov)',
+  group: 'weather',
+  defaultOn: true,
 
   async fetch(ctx) {
-    return ctx.net.fetchJSON(ENDPOINTS.nwsAlerts, { timeoutMs: 25000 });
+    return ctx.net.get(ENDPOINTS.nwsAlerts, { timeoutMs: 25000 });
+  },
+
+  count(ctx, data) { return (data.features || []).length; },
+
+  // For the briefing: alerts with their outer rings (point-in-area checks).
+  items() {
+    return [...alerts.entries()].map(([key, a]) => ({ key, title: a.event, severity: a.severity, rings: a._rings || [], areaDesc: a.areaDesc }));
   },
 
   render(ctx, data) {
@@ -43,8 +52,8 @@ export default {
     for (const f of data.features) {
       const p = f.properties || {};
       const key = String(p.id || f.id);
-      alerts.set(key, p);
       const polys = rings(f.geometry);
+      alerts.set(key, { ...p, _rings: polys.map((pp) => pp[0]).filter(Boolean) });
       if (!polys.length) { unmapped++; continue; }
       const col = Cesium.Color.fromCssColorString(SEVERITY[p.severity] || SEVERITY.Unknown);
       polys.forEach((poly, i) => {

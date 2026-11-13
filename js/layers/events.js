@@ -45,6 +45,8 @@ export default {
   color: COLORS.fire,
   icon: '<svg viewBox="0 0 24 24"><path d="M12 2c1 4 5 5.5 5 11a5 5 0 0 1-10 0c0-2.4 1.2-4 2.5-5 0 2 .8 3 2 3.5C11 9 11 5 12 2z" fill="currentColor"/></svg>',
   attribution: 'Natural events: NASA Earth Observatory Natural Event Tracker (EONET)',
+  group: 'hazards',
+  defaultOn: true,
 
   init(ctx) {
     billboards = ctx.primitives.add(new ctx.Cesium.BillboardCollection());
@@ -52,7 +54,13 @@ export default {
 
   async fetch(ctx) {
     const days = Math.max(1, Math.min(365, Number(ctx.settings.get('eventDays')) || 30));
-    return ctx.net.fetchJSON(ctx.net.fillUrl(ENDPOINTS.eonet, { days }), { timeoutMs: 25000 });
+    return ctx.net.get(ctx.net.fillUrl(ENDPOINTS.eonet, { days }), { timeoutMs: 25000 });
+  },
+
+  count(ctx, data) { return (data.events || []).length; },
+
+  items() {
+    return [...events.entries()].map(([key, e]) => ({ key, lat: e.lat, lon: e.lon, title: e.title, kind: e.cat.name }));
   },
 
   render(ctx, data) {

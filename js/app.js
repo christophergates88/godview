@@ -17,14 +17,17 @@ export async function start() {
   const manager = new LayerManager(viewer, LAYERS);
   initUI({ viewer, manager, layers: LAYERS });
 
-  // Turn on the layers that were on last time.
+  // Turn on the layers that were on last time (or each layer's default the
+  // first time), a quarter-second apart so they do not all fetch at once.
   const enabled = settings.get('enabled');
-  for (const layer of LAYERS) if (enabled[layer.id]) manager.enable(layer.id, true);
+  LAYERS.filter((l) => enabled[l.id] ?? l.defaultOn)
+    .forEach((l, i) => setTimeout(() => manager.enable(l.id, true), i * 250));
 
   // Layers that depend on where you are looking (flights) reload when the camera stops.
   let t = null;
   globe.onCameraIdle(() => { clearTimeout(t); t = setTimeout(() => manager.viewChanged(), 600); });
 
   // Handy for debugging in the browser console: GodView.manager.state
-  window.GodView = { viewer, manager, settings, layers: LAYERS, globe };
+  // GodView.selfTest() checks every data source once (see README).
+  window.GodView = { viewer, manager, settings, layers: LAYERS, globe, selfTest: (opts) => manager.selfTest(opts) };
 }

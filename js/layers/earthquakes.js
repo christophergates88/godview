@@ -18,6 +18,8 @@ export default {
   color: COLORS.quakes,
   icon: '<svg viewBox="0 0 24 24"><path d="M2 12h4l2-6 4 12 3-9 2 3h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   attribution: 'Earthquakes: U.S. Geological Survey (USGS) Earthquake Hazards Program',
+  group: 'hazards',
+  defaultOn: true,
 
   init(ctx) {
     points = ctx.primitives.add(new ctx.Cesium.PointPrimitiveCollection());
@@ -25,7 +27,13 @@ export default {
 
   async fetch(ctx) {
     const feed = ctx.settings.get('quakeFeed') || '2.5_day';
-    return ctx.net.fetchJSON(ctx.net.fillUrl(ENDPOINTS.earthquakes, { feed }));
+    return ctx.net.get(ctx.net.fillUrl(ENDPOINTS.earthquakes, { feed }));
+  },
+
+  count(ctx, data) { return (data.features || []).length; },
+
+  items() {
+    return [...quakes.entries()].map(([key, q]) => ({ key, lat: q.lat, lon: q.lon, title: `M${q.mag != null ? q.mag.toFixed(1) : '?'} ${q.place || ''}`.trim(), mag: q.mag, time: q.time }));
   },
 
   render(ctx, data) {

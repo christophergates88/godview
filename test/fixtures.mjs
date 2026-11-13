@@ -99,3 +99,91 @@ export const airplaneslive = () => ({
   ],
   msg: 'No error', now: now, total: 2, ctime: now, ptime: 3,
 });
+
+// ---------------------------------------------------------------- v2 sources
+const ac = (hex, flight, lat, lon, extra = {}) => ({ hex, flight, lat, lon, alt_baro: 20000, alt_geom: 20400, gs: 300, track: 120, seen_pos: 2, ...extra });
+export const adsbMil = () => ({ ac: [ac('ae1234', 'RCH123 ', 32.6, -83.6, { t: 'C17', r: '05-5140' }), ac('ae5678', 'TOPCAT1 ', 34.0, -84.5, { t: 'F16' })], now, total: 2 });
+export const adsbSqk = (code) => ({ ac: code === '7700' ? [ac('a0f00d', 'UAL99 ', 33.0, -82.0, { squawk: '7700' })] : [], now, total: code === '7700' ? 1 : 0 });
+
+export const faa = () => `<?xml version="1.0" encoding="UTF-8"?>
+<AIRPORT_STATUS_INFORMATION><Update_Time>Thu Nov 12 20:00:00 2026 GMT</Update_Time>
+<Delay_type><Name>Ground Stop Programs</Name><Ground_Stop_List><Program><ARPT>ATL</ARPT><Reason>thunderstorms</Reason><End_Time>8:45 pm EST</End_Time></Program></Ground_Stop_List></Delay_type>
+<Delay_type><Name>General Arrival/Departure Delay Info</Name><Arrival_Departure_Delay_List><Delay><ARPT>EWR</ARPT><Reason>VOL:Volume</Reason><Arrival_Departure Type="Departure"><Min>16 minutes</Min><Max>30 minutes</Max><Trend>Increasing</Trend></Arrival_Departure></Delay><Delay><ARPT>ZZZ</ARPT><Reason>test</Reason></Delay></Arrival_Departure_Delay_List></Delay_type>
+</AIRPORT_STATUS_INFORMATION>`;
+
+export const launches = () => ({ count: 2, results: [
+  { id: 'aaaa-1', name: 'Falcon 9 Block 5 | Starlink Group 10-1', net: iso(now + 5 * 3600e3), status: { name: 'Go for Launch', abbrev: 'Go' }, launch_service_provider: { name: 'SpaceX' }, rocket: { configuration: { full_name: 'Falcon 9 Block 5' } }, mission: { name: 'Starlink Group 10-1', description: 'Sample mission text.', orbit: { name: 'Low Earth Orbit' } }, pad: { name: 'SLC-40', latitude: '28.56194122', longitude: '-80.57735736', location: { name: 'Cape Canaveral SFS, FL, USA' } }, image: { image_url: 'https://example.invalid/f9.jpg' } },
+  { id: 'aaaa-2', name: 'Electron | Sample', net: iso(now + 3 * 86400e3), status: { name: 'To Be Confirmed' }, launch_service_provider: { name: 'Rocket Lab' }, rocket: { configuration: { full_name: 'Electron' } }, mission: null, pad: { name: 'LC-1A', latitude: '-39.262833', longitude: '177.864469', location: { name: 'Mahia Peninsula, New Zealand' } } },
+] });
+
+export const ovation = () => ({ 'Observation Time': iso(now), 'Forecast Time': iso(now + 1800e3), 'Data Format': '[Longitude, Latitude, Aurora]',
+  coordinates: [[0, 65, 30], [10, 66, 55], [270, 60, 12], [280, 61, 5], [200, -70, 20]] });
+export const kp = () => [['time_tag', 'Kp', 'a_running', 'station_count'], ['2026-11-12 18:00:00.000', '3.67', '22', '8']];
+
+export const tideStations = () => ({ count: 2, stations: [{ id: '8670870', name: 'Fort Pulaski', state: 'GA', lat: 32.0367, lng: -80.9017 }, { id: '8720030', name: 'Fernandina Beach', state: 'FL', lat: 30.6714, lng: -81.4658 }] });
+export const tideWL = () => ({ metadata: { id: '8670870' }, data: [{ t: '2026-11-12 20:00', v: '1.234', s: '0.01', f: '0,0,0,0', q: 'p' }] });
+export const tidePred = () => ({ predictions: [{ t: '2026-11-12 03:12', v: '2.301', type: 'H' }, { t: '2026-11-12 09:30', v: '0.102', type: 'L' }] });
+
+export const ndbc = () => `#STN       LAT      LON  YYYY MM DD hh mm WDIR WSPD   GST WVHT  DPD APD MWD   PRES  PTDY  ATMP  WTMP  DEWP  VIS   TIDE
+#text      deg      deg   yr mo day hr mn degT  m/s   m/s   m   sec sec degT   hPa   hPa  degC  degC  degC  nmi     ft
+41008   31.400  -80.866  2026 11 12 19 50  40  6.0   7.0  1.1    7  5.2  60 1018.4    MM  20.1  21.5  15.0   MM     MM
+FPKG1   32.035  -80.903  2026 11 12 19 54 350  4.1   5.1   MM   MM   MM  MM 1018.9    MM  18.2    MM  12.1   MM     MM
+`;
+
+export const spcCsv = () => `Time,F_Scale,Location,County,State,Lat,Lon,Comments
+1905,UNK,2 N Sampleville,Putnam,GA,33.35,-83.38,Brief tornado reported by spotter. (FFC)
+Time,Speed,Location,County,State,Lat,Lon,Comments
+1910,UNK,Eatonton,Putnam,GA,33.33,-83.39,"Trees down, one on a house. (FFC)"
+Time,Size,Location,County,State,Lat,Lon,Comments
+1920,100,Milledgeville,Baldwin,GA,33.08,-83.23,Quarter size hail. (FFC)
+`;
+export const spcOutlook = () => ({ type: 'FeatureCollection', features: [
+  { type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: [[[[-86, 31], [-81, 31], [-81, 35], [-86, 35], [-86, 31]]]] }, properties: { DN: 2, VALID: '202611121200', EXPIRE: '202611131200', ISSUE: '202611121630', LABEL: 'TSTM', LABEL2: 'General Thunderstorms Risk', stroke: '#55BB55', fill: '#C1E9C1' } },
+  { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-85, 32], [-82, 32], [-82, 34], [-85, 34], [-85, 32]]] }, properties: { DN: 4, LABEL: 'SLGT', LABEL2: 'Slight Risk', stroke: '#DDAA00', fill: '#FFE066' } },
+] });
+export const nhc = () => ({ activeStorms: [{ id: 'al192026', binNumber: 'AT4', name: 'Sample', classification: 'TS', intensity: '50', pressure: '998', latitude: '25.1N', longitude: '70.3W', latitudeNumeric: 25.1, longitudeNumeric: -70.3, movementDir: 300, movementSpeed: 12, lastUpdate: iso(now), publicAdvisory: { advNum: '5', url: 'https://www.nhc.noaa.gov/text/refresh/MIATCPAT4+shtml/sample.shtml' } }] });
+
+export const openMeteoGrid = (n) => Array.from({ length: n }, (_, i) => ({ latitude: 32 + i * 0.1, longitude: -84 + i * 0.1, current: { time: '2026-11-12T20:00', temperature_2m: 10 + i, wind_speed_10m: 12, wind_direction_10m: 200, weather_code: 1, us_aqi: 20 + i * 5, pm2_5: 4.1, pm10: 8.3, ozone: 60 } }));
+
+export const perimeters = () => ({ type: 'FeatureCollection', features: [{ type: 'Feature', id: 11, geometry: { type: 'Polygon', coordinates: [[[-83.6, 33.5], [-83.5, 33.5], [-83.5, 33.6], [-83.6, 33.6], [-83.6, 33.5]]] }, properties: { poly_IncidentName: 'Sample Creek', attr_IncidentSize: 812, attr_PercentContained: 40, poly_GISAcres: 805.2, attr_FireDiscoveryDateTime: now - 3 * 86400e3, attr_POOState: 'US-GA' } }] });
+export const incidents = () => ({ type: 'FeatureCollection', features: [
+  { type: 'Feature', id: 1, geometry: { type: 'Point', coordinates: [-83.55, 33.55] }, properties: { IncidentName: 'Sample Creek', IncidentSize: 812, PercentContained: 40, FireDiscoveryDateTime: now - 3 * 86400e3, POOState: 'US-GA', POOCounty: 'Putnam', UniqueFireIdentifier: '2026-GAXXX-000123' } },
+  { type: 'Feature', id: 2, geometry: { type: 'Point', coordinates: [-120.5, 38.5] }, properties: { IncidentName: 'Sample Ridge', IncidentSize: 50, PercentContained: 0, FireDiscoveryDateTime: now - 86400e3, POOState: 'US-CA', POOCounty: 'El Dorado', UniqueFireIdentifier: '2026-CAXXX-000456' } },
+] });
+export const firmsCsv = () => `latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight
+33.31,-83.41,330.2,0.39,0.36,2026-11-12,1842,N,VIIRS,n,2.0NRT,290.1,5.4,D
+33.52,-83.58,355.0,0.40,0.37,2026-11-12,1842,N,VIIRS,h,2.0NRT,295.3,22.7,D
+`;
+export const volcanoes = () => ([{ obs_fullname: 'Alaska Volcano Observatory', obs_abbr: 'avo', volcano_name: 'Great Sitkin', vnum: '311120', alert_level: 'WATCH', color_code: 'ORANGE', sent_utc: '2026-11-12 18:00:00', notice_url: 'https://volcanoes.usgs.gov/hans2/view/notice/sample', latitude: 52.076, longitude: -176.13 }]);
+export const gauges = () => ({ gauges: [
+  { lid: 'OCOG1', name: 'Oconee River at Milledgeville', latitude: 33.09, longitude: -83.21, status: { observed: { primary: 12.3, primaryUnit: 'ft', floodCategory: 'no_flooding', validTime: iso(now - 3600e3) }, forecast: { floodCategory: 'no_flooding' } } },
+  { lid: 'ALBG1', name: 'Flint River at Albany', latitude: 31.59, longitude: -84.14, status: { observed: { primary: 22.0, primaryUnit: 'ft', floodCategory: 'minor', validTime: iso(now - 3600e3) }, forecast: { floodCategory: 'action' } } },
+] });
+export const drought = () => ({ type: 'FeatureCollection', features: [
+  { type: 'Feature', properties: { DM: 0 }, geometry: { type: 'MultiPolygon', coordinates: [[[[-85, 31], [-82, 31], [-82, 33], [-85, 33], [-85, 31]]], [[[-100, 35], [-98, 35], [-98, 36], [-100, 36], [-100, 35]]]] } },
+  { type: 'Feature', properties: { DM: 2 }, geometry: { type: 'Polygon', coordinates: [[[-84, 31.5], [-83, 31.5], [-83, 32.5], [-84, 32.5], [-84, 31.5]]] } },
+] });
+export const ga511Cams = () => ([
+  { Id: 186, Source: 'GDOT', SourceId: '186', Roadway: 'SR 44', Direction: 'Northbound', Latitude: 33.33, Longitude: -83.39, Location: 'SR 44 at Sample Rd (Putnam)', SortOrder: 0, Name: 'GDOT-PUT-0001', Views: [{ Id: 186, Url: 'https://511ga.org/map/Cctv/186', Status: 'Enabled', Description: 'sample' }] },
+  { Id: 187, Source: 'GDOT', Roadway: 'I-75', Direction: 'Southbound', Latitude: 33.75, Longitude: -84.39, Location: 'I-75 at 10th St (Fulton)', Views: [{ Id: 187, Url: 'https://511ga.org/map/Cctv/187', Status: 'Enabled' }] },
+]);
+export const ga511Events = () => ([{ ID: 'E1', SourceId: 's', Organization: 'GDOT', RoadwayName: 'I-16', DirectionOfTravel: 'Eastbound', Description: 'Crash blocking right lane (sample).', Reported: Math.floor(now / 1000) - 3600, LastUpdated: Math.floor(now / 1000) - 600, StartDate: Math.floor(now / 1000) - 3600, EventType: 'accidentsAndIncidents', Subtype: 'crash', Severity: '2', LanesAffected: 'Right lane', Latitude: 32.8, Longitude: -83.6 }]);
+export const caltrans = () => ({ data: [{ cctv: { index: '1', recordTimestamp: {}, location: { district: '7', locationName: 'I-405 at Sample Blvd', nearbyPlace: 'Los Angeles', latitude: '34.05', longitude: '-118.44', route: 'I-405', direction: 'North' }, inService: 'true', imageData: { static: { currentImageURL: 'https://cwwp2.dot.ca.gov/data/d7/cctv/image/sample/sample.jpg' } } } }] });
+export const amtrak = () => ({ 19: [{ routeName: 'Crescent', trainNum: '19', trainID: '19-12', lat: 33.75, lon: -84.39, velocity: 54.2, heading: 'SW', trainTimely: 'On Time', trainState: 'Active', origName: 'New York', destName: 'New Orleans', lastValTS: iso(now - 120e3), stations: [{ name: 'Birmingham', status: 'Enroute' }] }] });
+export const gbfsInfo = () => ({ data: { stations: [{ station_id: 's1', name: 'Sample St & 1st', lat: 38.90, lon: -77.03, capacity: 15 }, { station_id: 's2', name: 'Sample Ave & 2nd', lat: 38.91, lon: -77.04, capacity: 11 }] } });
+export const gbfsStatus = () => ({ data: { stations: [{ station_id: 's1', num_bikes_available: 4, num_ebikes_available: 1, num_docks_available: 11 }, { station_id: 's2', num_bikes_available: 0, num_docks_available: 11 }] } });
+export const overpass = (q) => {
+  const els = [];
+  if (/power/.test(q)) els.push({ type: 'way', id: 101, center: { lat: 33.06, lon: -83.81 }, tags: { power: 'plant', name: 'Plant Sample', 'plant:source': /nuclear/.test(q) ? 'nuclear' : 'coal', operator: 'Sample Power', 'plant:output:electricity': '1000 MW' } });
+  if (/ALPR/.test(q)) els.push({ type: 'node', id: 202, lat: 33.32, lon: -83.38, tags: { 'surveillance:type': 'ALPR', manufacturer: 'Flock Safety', direction: '90' } });
+  if (/communication/.test(q)) els.push({ type: 'node', id: 303, lat: 33.30, lon: -83.42, tags: { 'tower:type': 'communication', operator: 'Sample Towers' } });
+  return { version: 0.6, elements: els };
+};
+export const cables = () => ({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: { id: 'sample-cable', name: 'Sample Atlantic Cable', color: '#3ee6c4' }, geometry: { type: 'MultiLineString', coordinates: [[[-80, 32], [-60, 35], [-10, 45]]] } }] });
+export const radio = () => ([
+  { stationuuid: 'r1', name: 'Sample FM', url_resolved: 'https://stream.example.invalid/live.mp3', homepage: 'https://example.invalid', tags: 'news,talk', country: 'United States', state: 'Georgia', language: 'english', codec: 'MP3', bitrate: 128, geo_lat: 33.32, geo_long: -83.39 },
+  { stationuuid: 'r2', name: 'Old AM', url_resolved: 'http://insecure.example.invalid/live', tags: 'country', country: 'United States', state: 'Georgia', geo_lat: 33.32, geo_long: -83.39 },
+]);
+export const wikiGeo = () => ({ batchcomplete: '', query: { geosearch: [{ pageid: 123, ns: 0, title: 'Eatonton, Georgia', lat: 33.3268, lon: -83.3885, dist: 3100.5, primary: '' }] } });
+export const wikiSummary = () => ({ title: 'Eatonton, Georgia', extract: 'Eatonton is a city in Putnam County, Georgia (sample text).', thumbnail: { source: 'https://upload.wikimedia.org/sample.jpg' } });
+export const inat = () => ({ total_results: 1, results: [{ id: 999, species_guess: 'Northern Cardinal', taxon: { name: 'Cardinalis cardinalis', preferred_common_name: 'Northern Cardinal', iconic_taxon_name: 'Aves' }, geojson: { type: 'Point', coordinates: [-83.4, 33.3] }, observed_on: '2026-11-10', user: { login: 'sample_user' }, quality_grade: 'research', photos: [{ url: 'https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.jpg' }], uri: 'https://www.inaturalist.org/observations/999' }] });

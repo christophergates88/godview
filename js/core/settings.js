@@ -12,12 +12,11 @@ const defaults = () => ({
   viewStyle: 'normal',
   start: { ...DEFAULT_START },
   intervals: Object.fromEntries(Object.entries(INTERVALS).map(([k, v]) => [k, v.def])),
-  enabled: { flights: true, satellites: true, earthquakes: true, events: true, radar: false, alerts: false },
-  satGroup: 'visual',
+  enabled: {},                // layer id -> true/false; missing = the layer's own defaultOn
   quakeFeed: '2.5_day',
   eventDays: 30,
   smoothMotion: true,
-  flightRelay: 'https://godview-flights.christophergates-cg.workers.dev/?url=',  // the owner's Cloudflare relay (extras/flight-relay-worker.js)
+  dataRelay: 'https://godview-flights.christophergates-cg.workers.dev/?url=',  // the owner's Cloudflare relay (extras/flight-relay-worker.js)
 });
 
 function read(key) {
@@ -32,7 +31,10 @@ const listeners = new Set();
 
 function merge(base, saved) {
   const out = { ...base, ...saved };
-  if (!out.flightRelay) out.flightRelay = base.flightRelay; // a blank saved value falls back to the built-in relay
+  if (!saved.dataRelay && saved.flightRelay) out.dataRelay = saved.flightRelay; // v1 name
+  if (!out.dataRelay) out.dataRelay = base.dataRelay; // a blank saved value falls back to the built-in relay
+  delete out.flightRelay;
+  delete out.satGroup;
   for (const k of ['start', 'intervals', 'enabled']) out[k] = { ...base[k], ...(saved[k] || {}) };
   return out;
 }
@@ -56,7 +58,8 @@ export const settings = {
   interval(layerId) {
     const lim = INTERVALS[layerId];
     const v = Number(state.intervals[layerId]);
-    if (!lim) return v || 0;
+    if (!lim) return Number.isFinite(v) ? v : 0;
+    if (lim.def === 0) return 0;
     return Math.max(lim.min, Number.isFinite(v) && v > 0 ? v : lim.def);
   },
 };

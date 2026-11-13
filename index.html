@@ -22,8 +22,11 @@
     <div class="brand" aria-hidden="true">GODVIEW</div>
     <form id="search" role="search" autocomplete="off">
       <svg class="search-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
-      <input id="search-input" type="search" inputmode="search" enterkeyhint="search" placeholder="Search a place or lat, lon" aria-label="Search places">
+      <input id="search-input" type="search" inputmode="search" enterkeyhint="search" placeholder="Search places or lat, lon" aria-label="Search places">
     </form>
+    <button id="btn-brief" class="icon-btn" aria-label="What's here" title="What's here (briefing)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </button>
     <button id="btn-locate" class="icon-btn" aria-label="Go to my location" title="My location">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
@@ -38,9 +41,15 @@
   <!-- Layer controls: bottom sheet on phones, side panel on desktop -->
   <section id="sheet" class="sheet" data-state="peek" aria-label="Layers">
     <button class="sheet-handle" id="sheet-handle" aria-label="Show or hide layer details"><span></span></button>
-    <div id="chips" class="chips"></div>
+    <div id="chips" class="chips">
+      <button id="chip-all" class="chip all" aria-label="Show all layers">
+        <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+        <span>Layers</span><span class="n" id="chip-all-n"></span>
+      </button>
+      <div id="chips-on" class="chips-on"></div>
+    </div>
     <div class="sheet-body">
-      <h2 class="sec-title">Layers</h2>
+      <input id="layer-filter" class="filter" type="search" placeholder="Filter layers (e.g. fire, camera, Georgia)" aria-label="Filter layers">
       <div id="layer-list" class="layer-list"></div>
       <h2 class="sec-title">View</h2>
       <div id="style-seg" class="seg" role="group" aria-label="View style"></div>
@@ -63,10 +72,13 @@
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
       </button>
     </div>
+    <img id="card-img" class="card-img" alt="" hidden>
     <dl id="card-rows" class="rows"></dl>
+    <div id="card-brief" class="card-brief"></div>
     <p id="card-text" class="card-text" hidden></p>
     <div class="card-actions">
       <button id="card-follow" class="btn primary" hidden>Follow</button>
+      <button id="card-play" class="btn primary" hidden>Play</button>
       <button id="card-fly" class="btn">Fly to</button>
       <a id="card-link" class="btn" target="_blank" rel="noopener" hidden>Source</a>
     </div>

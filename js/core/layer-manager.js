@@ -3,13 +3,17 @@
 //
 // A layer never crashes the app: every call into a layer is wrapped in try/catch.
 
-import { NET, TICK_MS, TICK_MS_FOLLOWING } from '../config.js';
-import { settings } from './settings.js';
+import { NET, TICK_MS, TICK_MS_FOLLOWING, KEYS } from '../config.js';
+import { settings, apiKeys } from './settings.js';
 import { fmt } from './units.js';
 import * as net from './net.js';
 import * as globe from '../globe.js';
 
 const Cesium = window.Cesium;
+
+const withTimeout = (p, ms, msg = 'Timed out') => Promise.race([
+  p, new Promise((_, rej) => setTimeout(() => rej(new net.FeedError(msg, { kind: 'timeout' })), ms)),
+]);
 
 export class LayerManager {
   constructor(viewer, layers) {
@@ -22,7 +26,7 @@ export class LayerManager {
     this.paused = false;
 
     for (const layer of layers) {
-      this.state[layer.id] = { enabled: false, status: 'off', message: '', note: '', count: null, updatedAt: 0, failures: 0, busy: false };
+      this.state[layer.id] = { enabled: false, status: 'off', message: '', note: '', count: null, updatedAt: 0, failures: 0, busy: false, via: '' };
     }
 
     document.addEventListener('visibilitychange', () => this.setPaused(document.hidden));
@@ -33,14 +37,30 @@ export class LayerManager {
   emit(id) { this.listeners.forEach((fn) => { try { fn(id, this.state[id]); } catch (e) { console.error(e); } }); }
   get(id) { return this.layers.find((l) => l.id === id); }
 
+  // Helpers every layer gets for network access. get() picks direct or relay
+  // and remembers which one was used (shown in the panel and in selfTest).
+  netFor(rec) {
+    return {
+      ...net,
+      get: async (url, opts) => {
+        const r = await net.get(url, opts);
+        rec.via = rec.via === 'relay' ? 'relay' : r.via;
+        return r.data;
+      },
+    };
+  }
+
   // Everything a layer is allowed to use.
   makeCtx(layer) {
     const viewer = this.viewer;
     const primitives = viewer.scene.primitives.add(new Cesium.PrimitiveCollection());
     let entitySource = null;
     const self = this;
+    const rec = { via: '' };
     return {
-      Cesium, viewer, scene: viewer.scene, settings, fmt, net, globe,
+      Cesium, viewer, scene: viewer.scene, settings, fmt, globe,
+      net: this.netFor(rec),
+      rec,
       primitives,
       get entities() {
         if (!entitySource) {
@@ -50,10 +70,12 @@ export class LayerManager {
         return entitySource.entities;
       },
       hasEntities: () => entitySource,
+      key: (name) => apiKeys.get(name),
       view: () => globe.getView(),
       requestRender: () => viewer.scene.requestRender(),
       setNote(text) { self.state[layer.id].note = text || ''; self.emit(layer.id); },
       refresh: () => self.refresh(layer.id),
+      test: false,
     };
   }
 
@@ -96,10 +118,18 @@ export class LayerManager {
     if (!layer || !st.enabled || st.busy) return;
     clearTimeout(this.timers[id]);
     if (this.paused) return;
+    if (layer.needsKey && !apiKeys.get(layer.needsKey)) {
+      st.status = 'needs-key';
+      st.message = `Needs a free key: ${KEYS[layer.needsKey]?.name || layer.needsKey} (Settings > API keys)`;
+      this.emit(id);
+      return;
+    }
     st.busy = true;
+    this.emit(id);
     const ctx = this.ctx[id];
     let nextSec = settings.interval(id) || 0;
     try {
+      ctx.rec.via = '';
       const data = await layer.fetch(ctx);
       if (!st.enabled) return;
       const count = layer.render(ctx, data);
@@ -107,6 +137,7 @@ export class LayerManager {
       st.status = 'ok';
       st.message = '';
       st.failures = 0;
+      st.via = ctx.rec.via || (layer.computed ? 'computed' : '');
       st.updatedAt = Date.now();
     } catch (e) {
       st.failures += 1;
@@ -123,40 +154,45 @@ export class LayerManager {
       st.busy = false;
       this.emit(id);
       this.viewer.scene.requestRender();
-      if (st.enabled && nextSec > 0) this.timers[id] = setTimeout(() => this.refresh(id), nextSec * 1000);
+      // A little randomness so many layers do not all refresh at the same moment.
+      if (st.enabled && nextSec > 0) this.timers[id] = setTimeout(() => this.refresh(id), nextSec * 1000 * (0.92 + Math.random() * 0.16));
     }
   }
 
   // Called when the camera stops moving: layers that depend on the view can reload.
   viewChanged() {
     const view = globe.getView();
+    let delay = 0;
     for (const layer of this.layers) {
       const st = this.state[layer.id];
       if (!st.enabled || !layer.onViewChange) continue;
       let want = false;
       this.safe(layer, 'onViewChange', () => { want = layer.onViewChange(this.ctx[layer.id], view); });
-      if (want) this.refresh(layer.id);
+      if (want) { setTimeout(() => this.refresh(layer.id), delay); delay += 250; } // staggered
     }
   }
 
   settingChanged(key) {
     for (const layer of this.layers) {
       const st = this.state[layer.id];
-      if (!st.enabled || !layer.onSettingChange) continue;
-      let want = false;
-      this.safe(layer, 'onSettingChange', () => { want = layer.onSettingChange(this.ctx[layer.id], key); });
-      if (want) this.refresh(layer.id);
+      if (!st.enabled) continue;
+      let want = key === 'dataRelay' && (st.status === 'error' || st.status === 'needs-key');
+      if (key.startsWith('key:') && layer.needsKey === key.slice(4)) want = true;
+      if (layer.onSettingChange) this.safe(layer, 'onSettingChange', () => { want = layer.onSettingChange(this.ctx[layer.id], key) || want; });
+      if (want) { st.failures = 0; this.refresh(layer.id); }
     }
   }
 
   setPaused(p) {
     this.paused = p;
     if (!p) {
-      // Coming back: refresh anything that is now overdue.
+      // Coming back: refresh anything that is now overdue (staggered).
+      let delay = 0;
       for (const layer of this.layers) {
         const st = this.state[layer.id];
-        const due = (Date.now() - st.updatedAt) / 1000 >= (settings.interval(layer.id) || Infinity);
-        if (st.enabled && (due || st.status === 'error')) this.refresh(layer.id);
+        const iv = settings.interval(layer.id);
+        const due = iv > 0 && (Date.now() - st.updatedAt) / 1000 >= iv;
+        if (st.enabled && (due || st.status === 'error')) { setTimeout(() => this.refresh(layer.id), delay); delay += 300; }
       }
     }
   }
@@ -186,11 +222,25 @@ export class LayerManager {
     return d;
   }
 
+  // Optional extra details loaded on demand when a card opens (e.g. tide readings).
+  async details(id, key) {
+    const layer = this.get(id);
+    if (!layer || !layer.details) return null;
+    return layer.details(this.ctx[id], key);
+  }
+
   position(id, key) {
     const layer = this.get(id);
     let p;
     try { p = layer.position && layer.position(this.ctx[id], key); } catch { p = undefined; }
     return p;
+  }
+
+  // Loaded items of enabled layers (for the "What's here" briefing).
+  items(id) {
+    const layer = this.get(id);
+    if (!layer || !this.state[id].enabled || !layer.items) return [];
+    try { return layer.items(this.ctx[id]) || []; } catch { return []; }
   }
 
   select(id, key) {
@@ -209,5 +259,40 @@ export class LayerManager {
       st.message = `Layer error (${what})`;
       this.emit(layer.id);
     }
+  }
+
+  // ---------------------------------------------------------------- self-test
+  // One real fetch per layer for a fixed view (central Georgia, ~300 km),
+  // whether or not the layer is on. Draws nothing and changes no settings.
+  // Always resolves within 60 s to [{ id, name, ok, count, ms, via, error }].
+  selfTest({ lat = 33.3, lon = -83.4, radiusKm = 300 } = {}) {
+    const view = { lat, lon, radiusKm, heightKm: radiusKm / 0.9 };
+    const results = this.layers.map((l) => ({ id: l.id, name: l.name, ok: false, count: null, ms: null, via: null, error: 'did not finish' }));
+    const runOne = async (layer, out) => {
+      const t0 = performance.now();
+      if (layer.needsKey && !apiKeys.get(layer.needsKey)) {
+        Object.assign(out, { via: 'needs-key', error: `needs a free key (${layer.needsKey})`, ms: 0 });
+        return;
+      }
+      const rec = { via: '' };
+      const ctx = {
+        Cesium, viewer: this.viewer, scene: this.viewer.scene, settings, fmt, globe,
+        net: this.netFor(rec), rec, key: (n) => apiKeys.get(n),
+        view: () => view, setNote() {}, requestRender() {}, refresh() {}, test: true,
+      };
+      try {
+        const data = await withTimeout(Promise.resolve().then(() => layer.fetch(ctx)), 15000, 'Timed out (15 s)');
+        let count = null;
+        if (layer.count) count = layer.count(ctx, data);
+        else if (Array.isArray(data)) count = data.length;
+        Object.assign(out, { ok: true, count, via: rec.via || (layer.computed ? 'computed' : 'direct'), error: null });
+      } catch (e) {
+        Object.assign(out, { ok: false, via: rec.via || null, error: (e && e.message) || String(e) });
+      }
+      out.ms = Math.round(performance.now() - t0);
+    };
+    const all = Promise.all(this.layers.map((l, i) => runOne(l, results[i]).catch(() => {})));
+    return Promise.race([all, new Promise((r) => setTimeout(r, 58000))])
+      .then(() => JSON.parse(JSON.stringify(results)));
   }
 }

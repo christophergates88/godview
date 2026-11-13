@@ -1,13 +1,14 @@
 # GodView
 
-A personal, lightweight "live Earth" viewer: a 3D globe you can spin and zoom,
-with live public data on top — aircraft, satellites, earthquakes, wildfires and
-other natural events, weather radar and US weather alerts. Tap anything to see
-details; follow a moving aircraft or satellite. Tap empty ground to see the
-weather there.
+A personal "live Earth" viewer: a 3D globe you can spin and zoom, with 46
+layers of live public data in seven groups — air, space, sea, weather, earth
+hazards, ground & infrastructure, and signals & media. Tap anything for
+details; follow a moving aircraft, satellite or train; tap empty ground for the
+weather there; press the (i) button for a plain-language "What's here" briefing.
 
-It is a plain static website (no server, no build step, no API keys), made for
-iPhone first and also comfortable on a Mac.
+It is a plain static website (no build step), made for iPhone first and also
+comfortable on a Mac. Most layers need no key; a few go through your own small
+relay, and two optional layers use free keys (see below).
 
 ## Putting it online (GitHub Pages)
 
@@ -26,71 +27,118 @@ and open `http://localhost:8000/` (opening `index.html` directly from disk will 
 |---|---|
 | `index.html` | The page skeleton: top bar, layer sheet, detail card, settings. |
 | `css/app.css` | All styling. Phone layout first; desktop layout at the bottom (`@media (min-width: 900px)`). |
-| `js/config.js` | **The one place to change things**: library versions, data URLs, refresh intervals, start location, base maps, colours (theme). |
-| `js/main.js` | Start-up: applies the theme, loads the globe library, starts the app, shows an error if that fails. |
-| `js/app.js` | Wires everything together. |
-| `js/globe.js` | The 3D globe (CesiumJS, no Cesium ion account): base maps, view styles (night vision / thermal / CRT shaders), camera, tapping, follow, icons. |
-| `js/ui.js` | Everything you touch: layer sheet, detail card, search, my location, settings, coordinate read-out. |
-| `js/core/layer-manager.js` | Runs the layers: timers, error back-off, pause in background, status for the panel. |
-| `js/core/settings.js` | Settings and optional API keys, saved in this browser only (localStorage). |
-| `js/core/net.js` | Fetch with timeout, readable errors, small cache. |
-| `js/core/units.js` | Imperial/metric formatting. |
-| `js/layers/index.js` | **The layer list** (and a description of the layer interface). |
-| `js/layers/*.js` | One file per layer. `_template.js` is a starting point for new ones. |
-| `extras/flight-relay-worker.js` | Optional: a tiny relay so live flights can work (see below). Not loaded by the app. |
+| `js/config.js` | **The one place to change things**: library versions, every data URL, the relay host list, optional keys, layer groups, refresh intervals, start location, base maps, colours. |
+| `js/main.js` | Start-up: applies the theme, loads the globe library, starts the app. |
+| `js/app.js` | Wires everything together; turns on default layers a quarter-second apart. |
+| `js/globe.js` | The 3D globe (CesiumJS, no Cesium ion account): base maps, view styles, camera, tapping, follow, icons. |
+| `js/ui.js` | Everything you touch: grouped layer panel with filter, detail card (photos, audio, extra details), "What's here", search, my location, settings. |
+| `js/brief.js` | Builds the "What's here" briefing from the loaded layers. |
+| `js/core/layer-manager.js` | Runs the layers: timers, error back-off, staggered refreshes, pause in background, status, and `selfTest()`. |
+| `js/core/net.js` | Fetch with timeout, readable errors, cache, and `get()` which goes direct or through the data relay automatically. |
+| `js/core/settings.js`, `units.js` | Saved settings and keys (this browser only); imperial/metric formatting. |
+| `js/layers/index.js` | **The layer list** and a description of the layer interface. |
+| `js/layers/*.js` | One file per layer (46). `_template.js` is a starting point. |
+| `js/layers/lib/` | Shared helpers: `point-layer.js`, `shape-layer.js`, `imagery-layer.js` (layer factories), `overpass.js` (OpenStreetMap), `geo.js`, `icons.js`, `airports.js`. |
+| `extras/flight-relay-worker.js` | The data relay (Cloudflare Worker) source. Not loaded by the app. |
 | `test/` | Offline test harness (not part of the app). |
 
 ## How to add a layer
 
-1. Copy `js/layers/_template.js` to e.g. `js/layers/volcanoes.js` and fill in
-   `id`, `name`, `icon`, `fetch`, `render`, `describe`.
-2. Add one import and one entry in `js/layers/index.js`.
-3. Add a refresh interval for it in `js/config.js` → `INTERVALS` (and its URL in `ENDPOINTS`).
+1. Copy `js/layers/_template.js` (it uses `makePointLayer`, so a layer is ~20 lines).
+2. Add one import and one entry in `js/layers/index.js`, with a `group`.
+3. Add its URL to `ENDPOINTS` and its refresh interval to `INTERVALS` in `js/config.js`.
+4. If the browser is not allowed to read that host directly (CORS), add the host to
+   `RELAY_HOSTS` in `js/config.js` **and** to `ALLOWED_HOSTS` in
+   `extras/flight-relay-worker.js`, then redeploy the worker.
 
-That's it: the panel row, chip, toggle, status, error handling, refresh timer,
-tap-for-details card and settings entry all appear automatically.
-The data source must be keyless and allow browser access (CORS), or need a
-key the user enters in Settings → API keys (read it with `apiKeys.get('name')`
-from `js/core/settings.js`).
+The panel row, group count, status, errors, refresh timer, tap card, briefing and
+self-test all pick the new layer up automatically.
 
 Instructions you can give an AI assistant: *"Add a GodView layer for X. Follow
 js/layers/_template.js and the interface described in js/layers/index.js; put
 the URL and interval in js/config.js; register it in js/layers/index.js."*
 
-## Data sources, limits and credits
+## The data relay
 
-Checked November 2026. "CORS ok" means a test from another website's address
-got the `Access-Control-Allow-Origin: *` header that lets a web page read it.
+Some public, keyless feeds do not let web pages read them (the browser "CORS"
+rule). GodView sends only those through your own relay, a tiny Cloudflare
+Worker (`extras/flight-relay-worker.js`). It is GET-only, answers only your
+GitHub Pages address, and forwards only to the hosts in its allow-list:
 
-| Layer | Source | Browser access | Limits / rules |
-|---|---|---|---|
-| Earthquakes | USGS real-time GeoJSON feeds | CORS ok | Feeds update every minute. App default: M2.5+ past day, every 2 min. |
-| Satellites | CelesTrak GP data (JSON) + satellite.js | CORS ok | Data changes every 2 h; repeat downloads of the same group before then get HTTP 403, and >50 errors in 2 h can block your IP. The app saves the download in the browser and reuses it for 2 h, and stops retrying on 403/404. |
-| Fires & events | NASA EONET v3 | CORS ok | No published limit. NASA says it is for general reference, not official. |
-| Weather radar | RainViewer Weather Maps API | CORS ok (JSON and tiles) | Free tier since Jan 2026: past 2 hours only, one colour scheme (Universal Blue), zoom 7 max, 100 requests/min per IP. |
-| US weather alerts | NWS api.weather.gov | CORS ok | Limit not published ("generous"). Alerts with only county/zone areas are counted but not drawn. |
-| Flights | OpenSky Network, then airplanes.live | **Not confirmed — see below** | OpenSky anonymous: 400 credits/day (the app uses ≤2 per request, every 60 s minimum 30 s). airplanes.live: 1 request/s, non-commercial. |
-| Point weather | Open-Meteo forecast API | CORS ok | Free for non-commercial use: 10,000 calls/day. CC BY 4.0. |
-| Place search | Open-Meteo Geocoding, then OpenStreetMap Nominatim | CORS ok | Nominatim: max 1 request/s, no search-as-you-type (the app only searches when you press Search). |
-| Base maps | Esri World Imagery, CARTO Dark, OpenStreetMap | CORS ok | Attribution shown on screen. Esri and CARTO free use is intended for light, non-commercial use; OSM tiles must not be bulk-downloaded. |
+`api.adsb.lol`, `opensky-network.org`, `api.airplanes.live`, `opendata.adsb.fi`,
+`nasstatus.faa.gov`, `www.ndbc.noaa.gov`, `www.nhc.noaa.gov`,
+`droughtmonitor.unl.edu`, `www.submarinecablemap.com`, `511ga.org`,
+and as fallbacks only (direct is tried first): `services3.arcgis.com`,
+`firms.modaps.eosdis.nasa.gov`, `overpass-api.de`.
 
-### About live flights (important)
-When this was built, every free, keyless aircraft source tested (OpenSky,
-airplanes.live, adsb.lol, adsb.fi, ADSB One) either did not send the CORS
-header or refused automated test requests, so **a web page probably cannot
-read them directly**. The Flights layer still tries OpenSky then airplanes.live,
-and if the browser blocks both, it says so in the panel and stops retrying.
-Nothing fake is shown.
+Settings > Data relay holds the relay address (the built-in one is used when blank).
 
-To get flights working, deploy the tiny relay in `extras/flight-relay-worker.js`
-to a free Cloudflare Worker (instructions inside the file), then paste its
-address in Settings → Flight data relay. Note: OpenSky is known to block some
-cloud-provider addresses, so via a relay airplanes.live is the more likely to work.
+## Layers (46) and their sources
+
+"Direct" = the browser reads it itself. "Relay" = through your data relay.
+"Key" = needs a free key in Settings > API keys. "Computed" = no network.
+"Area" = loads only the area in view and reloads when you move.
+On by default for a first visit: Flights, Satellites (brightest), Rocket launches,
+Day/night, US weather alerts, Earthquakes, Fires & events.
+
+| Group | Layer | Source | Via | Limits / notes |
+|---|---|---|---|---|
+| Air | Flights | adsb.lol (then OpenSky, airplanes.live) | Relay | Area; ODbL; no SLA |
+| Air | Military aircraft | adsb.lol `/v2/mil` | Relay | Worldwide, as tagged by adsb.lol |
+| Air | Emergency squawks | adsb.lol `/v2/sqk/7500,7600,7700` | Relay | Codes can be set by mistake |
+| Air | FAA airport delays | nasstatus.faa.gov | Relay | Only airports in the built-in list are placed |
+| Air | Major airports | Built-in list | Computed | Approximate positions |
+| Space | Satellites: brightest, space stations, Starlink, GPS, weather, geostationary | CelesTrak + satellite.js | Direct | Each group downloaded at most every 2 h (CelesTrak blocks repeats); Starlink is large and slower on phones |
+| Space | Rocket launches | Launch Library 2 (The Space Devs) | Direct | 15 requests/hour without a key; cached 30 min |
+| Space | Aurora forecast + Kp | NOAA SWPC | Direct | Model forecast |
+| Space | Day/night, Sun & Moon | Computed | Computed | ~0.5° accuracy |
+| Sea | Tides & water levels | NOAA CO-OPS | Direct | Tap a station to load readings |
+| Sea | Ocean buoys | NOAA NDBC latest_obs.txt | Relay | |
+| Weather | Weather radar | RainViewer | Direct | Past 2 h, zoom 7, 100 req/min |
+| Weather | US weather alerts | NWS api.weather.gov | Direct | Zone-only alerts counted, not drawn |
+| Weather | Storm reports | NOAA SPC today.csv | Direct | Preliminary, since 12Z |
+| Weather | Severe storm outlook | NOAA SPC Day 1 GeoJSON | Direct | |
+| Weather | Hurricanes & tropical storms | NOAA NHC CurrentStorms.json | Relay | Empty out of season |
+| Weather | NASA satellite view (daily) | NASA GIBS (VIIRS true colour, yesterday) | Direct | Swath gaps are normal |
+| Weather | Night lights | NASA GIBS Black Marble 2016 | Direct | Not live |
+| Weather | Temperature & wind grid | Open-Meteo | Direct | Area; 5×5 grid; 10,000 calls/day |
+| Weather | Air quality (AQI) | Open-Meteo air quality (CAMS) | Direct | Area; modelled, not station data |
+| Hazards | Earthquakes | USGS | Direct | |
+| Hazards | Fires & events | NASA EONET | Direct | Not official |
+| Hazards | Wildfire perimeters / incidents (US) | NIFC WFIGS (ArcGIS) | Direct (relay fallback) | Perimeters simplified, largest 300 |
+| Hazards | Satellite fire detections | NASA FIRMS | Key (`firms`) | Area; last 24 h |
+| Hazards | Volcano alerts (US) | USGS HANS | Direct | Elevated volcanoes only |
+| Hazards | River gauges & floods | NOAA NWPS | Direct | Area |
+| Hazards | Drought (US) | U.S. Drought Monitor | Relay | Large file; weekly |
+| Ground | Georgia traffic cameras / road incidents | Georgia 511 | Key (`ga511`) + relay | 10 calls/min |
+| Ground | California traffic cameras | Caltrans CWWP2 | Direct | Area (California only) |
+| Ground | Amtrak trains | Amtraker API (unofficial) | Direct | |
+| Ground | Bike share docks | GBFS (6 Lyft-run US systems) | Direct | Area; nearest supported system |
+| Ground | Power plants, Nuclear plants, Plate-reader cameras (ALPR), Comms towers | OpenStreetMap via Overpass | Direct (relay fallback) | Area; one query at a time; volunteer-mapped, incomplete |
+| Ground | Submarine cables | TeleGeography (CC BY-NC-SA) | Relay | Approximate routes |
+| Signals | Radio stations | radio-browser.info | Direct | Area; plays https streams only |
+| Signals | Wikipedia nearby | MediaWiki geosearch | Direct | Within 10 km of view centre |
+| Signals | Wildlife sightings | iNaturalist | Direct | Area; last 7 days |
+
+Not included, and why: ship AIS (aisstream.io forbids browser connections),
+lightning (no permitted keyless source found), FAA TFRs and GOES imagery (could
+not verify formats this round), webcams (Windy needs a key in a header the relay
+does not forward), internet outages (IODA needs country shapes; not done yet),
+news events (GDELT GEO endpoint could not be verified).
+
+## Self-test
+
+Open the site, then in the browser console run `await GodView.selfTest()`. Every
+layer does one real fetch for central Georgia (about 300 km), whether or not it
+is switched on, and you get back a list of `{ id, name, ok, count, ms, via, error }`.
+It finishes within 60 seconds, draws nothing and changes no settings (it may
+save downloaded data in the cache, as normal use does).
 
 ## Settings (all stored only in this browser)
-Units, refresh intervals (with safe minimums), start location (default:
-Georgia, USA), satellite group, earthquake feed, event window, flight relay,
-optional API keys for future layers, reset.
+Units, start location (default: Georgia, USA), API keys (Georgia 511, NASA
+FIRMS), data relay, earthquake feed, event window, refresh intervals (with
+safe minimums), sources and credits, reset. Group open/closed and which layers
+are on are remembered.
 
 Note: every site under `YOUR-USERNAME.github.io` shares one browser storage
 area (about 5 MB). GodView keeps its use small (the Starlink satellite group is
@@ -100,8 +148,10 @@ the largest at ~2 MB).
 `cd test && npm install && npm test` — runs logic checks in Node, then loads the
 real app in headless Chrome with every network request answered from local
 sample data (`test/fixtures.mjs`, hand-made in each provider's documented
-format) and checks layers, taps, cards, follow, search, settings and failure
-handling. Screenshots go to `test/out/`. Set `CHROME=/path/to/chrome` if needed.
+format) and checks every layer, the relay path, the self-test, the grouped
+panel, the briefing, taps, cards, follow, search, settings migration and failure
+handling. These samples are not live data, so passing tests do not prove a live
+feed works; `GodView.selfTest()` on the real site does that. Screenshots go to `test/out/`. Set `CHROME=/path/to/chrome` if needed.
 
 Credits: CesiumJS (Apache 2.0), satellite.js (MIT), and the data providers above.
 Public feeds can be late, incomplete or wrong — not for navigation or safety decisions.

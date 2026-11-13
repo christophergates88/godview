@@ -1,56 +1,36 @@
-// TEMPLATE for a new layer. Copy this file, rename it, fill it in, then add it
-// to the list in layers/index.js. Also add an interval for it in config.js
-// INTERVALS (e.g. myLayer: { def: 300, min: 60 }) and its URL in ENDPOINTS.
+// TEMPLATE for a new layer. Copy this file, rename it, fill it in, then:
+//   1. add one import + one entry in layers/index.js
+//   2. add its refresh interval in config.js INTERVALS (e.g. myLayer: { def: 300, min: 60 })
+//   3. put its URL in config.js ENDPOINTS
+//   4. if the browser blocks the host (CORS), add the host to config.js RELAY_HOSTS
+//      AND to ALLOWED_HOSTS in extras/flight-relay-worker.js, then redeploy the worker.
 //
-// This example would show points from a GeoJSON feed of Point features.
+// This example shows points from a GeoJSON feed of Point features.
+
+import { makePointLayer } from './lib/point-layer.js';
+import { ICONS } from './lib/icons.js';
 
 const URL = 'https://example.com/feed.geojson'; // better: put it in config.js ENDPOINTS
 
-const items = new Map();   // key -> the item's data (used by describe)
-let points = null;
-
-export default {
+export default makePointLayer({
   id: 'example',
   name: 'Example points',
+  group: 'signals',          // which panel group it appears in
   color: '#7fd8ff',
-  icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></svg>',
+  icon: ICONS.pin,
+  label: 'E',                // badge letter; or shape: 'point'
   attribution: 'Example data source',
+  // view: { maxKm: 1500, radiusKm: 200 },   // uncomment for "only the area in view"
+  // needsKey: 'myservice',                    // uncomment if it needs a free key (config KEYS)
 
-  init(ctx) {
-    points = ctx.primitives.add(new ctx.Cesium.PointPrimitiveCollection());
-  },
+  fetch: (ctx, q) => ctx.net.get(URL),       // q = { lat, lon, radiusKm } of the view
 
-  async fetch(ctx) {
-    return ctx.net.fetchJSON(URL); // throws a readable error if it fails
-  },
-
-  render(ctx, data) {
-    const { Cesium } = ctx;
-    points.removeAll();
-    items.clear();
-    for (const f of data.features || []) {
-      if (!f.geometry || f.geometry.type !== 'Point') continue;
-      const [lon, lat] = f.geometry.coordinates;
-      const key = String(f.id);
-      items.set(key, { lat, lon, props: f.properties || {} });
-      points.add({
-        id: { layer: 'example', key },          // this is what makes it tappable
-        position: Cesium.Cartesian3.fromDegrees(lon, lat, 1000),
-        pixelSize: 10,
-        color: Cesium.Color.fromCssColorString('#7fd8ff'),
-      });
-    }
-    return items.size;
-  },
-
-  describe(ctx, key) {
-    const it = items.get(key);
-    if (!it) return null;
-    return {
-      title: it.props.name || 'Point',
-      subtitle: ctx.fmt.latlon(it.lat, it.lon),
-      rows: [['Example', 'value']],
-      link: null,
-    };
-  },
-};
+  parse: (data, ctx) => (data.features || []).map((f) => ({
+    key: String(f.id),
+    lat: f.geometry.coordinates[1],
+    lon: f.geometry.coordinates[0],
+    title: f.properties.name || 'Point',
+    rows: [['Example', 'value']],
+    link: null,
+  })),
+});

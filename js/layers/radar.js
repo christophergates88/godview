@@ -17,9 +17,13 @@ export default {
   color: '#4da3ff',
   icon: '<svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 15a5 5 0 1 1 9.6-2A3.5 3.5 0 1 1 17 20H8a4 4 0 0 1-1-5z"/></g></svg>',
   attribution: 'Weather radar: RainViewer (rainviewer.com)',
+  group: 'weather',
 
   async fetch(ctx) {
-    return ctx.net.fetchJSON(ENDPOINTS.rainviewer);
+    return ctx.net.get(ENDPOINTS.rainviewer);
+  },
+
+  count(ctx, data) { return data?.radar?.past?.length || 0;
   },
 
   render(ctx, data) {
