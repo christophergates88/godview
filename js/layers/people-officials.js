@@ -217,7 +217,7 @@ layer.pointInfo = async (ctx, lat, lon) => { const c = card(await lookup(ctx, la
 addProbe('Census TIGERweb (districts)', async (ctx) => Object.keys(await whereIs(ctx, 33.3, -83.4)).length);
 addProbe('Congress list (unitedstates.github.io)', async (ctx) => (await ctx.net.get(ENDPOINTS.peopleLegislators, { timeoutMs: 30000 })).length);
 addProbe('Open States CSV (GA)', async (ctx) => parseCSV(await ctx.net.get(ctx.net.fillUrl(ENDPOINTS.peopleOpenStatesCsv, { st: 'ga' }), { type: 'text', timeoutMs: 25000 })).length - 1);
-addProbe('Wikidata (governor)', async (ctx) => (parseWd(await sparql(ctx, wdQuery({ state: { abbr: 'GA' }, county: { fips: '13237' } }))).governor ? 1 : 0));
+addProbe('Wikidata (governor)', async (ctx) => (parseWd(await sparql(ctx, wdQuery({ state: { abbr: 'GA' }, county: { fips: '13021' } }))).governor ? 1 : 0));
 addProbe('OpenFEC (DEMO_KEY)', async (ctx) => {
   const sen = slimLegislators(await ctx.net.get(ENDPOINTS.peopleLegislators, { timeoutMs: 30000 })).find((m) => m.type === 'sen' && pickFec(m));
   return ((await ctx.net.get(ctx.net.fillUrl(ENDPOINTS.peopleFecTotals, { id: pickFec(sen), key: 'DEMO_KEY' }))).results || []).length;

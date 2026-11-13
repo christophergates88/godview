@@ -44,6 +44,9 @@ export function parseEcho(j) {
   });
 }
 
+export const echoUrl = (ctx, lat, lon, mi) => ctx.net.fillUrl(ENDPOINTS.peopleEcho, { lat: lat.toFixed(4), lon: lon.toFixed(4), mi });
+export const needsSmaller = (j) => { const R = (j && j.Results) || {}; return !(R.Facilities || []).length && !!(R.ClusterOutput || R.ClusterRecords || Number(R.QueryRows) > 0); };
+
 export default makePointLayer({
   id: 'peopleEpa',
   name: 'EPA-regulated sites',
@@ -56,9 +59,21 @@ export default makePointLayer({
   max: 500,
   view: { maxKm: 400, radiusKm: 25, minGapMs: 10000 },
   attribution: 'EPA-regulated sites: U.S. EPA Enforcement and Compliance History Online (ECHO)',
-  fetch: (ctx, q) => ctx.net.get(ctx.net.fillUrl(ENDPOINTS.peopleEcho, { lat: q.lat.toFixed(4), lon: q.lon.toFixed(4), mi: Math.max(1, Math.min(25, Math.round(q.radiusKm / 1.609))) }), { timeoutMs: 30000 }),
+  // ECHO answers with map clusters instead of sites when a search holds too many
+  // (about 2,000). So start at up to 10 miles around the view centre and halve
+  // the radius until it gives sites (at most four tries).
+  async fetch(ctx, q) {
+    let mi = Math.max(1, Math.min(10, Math.round(q.radiusKm / 1.609)));
+    let j = null;
+    for (let i = 0; i < 4; i++) {
+      j = await ctx.net.get(echoUrl(ctx, q.lat, q.lon, mi), { timeoutMs: 30000 });
+      if (!needsSmaller(j) || mi <= 1) break;
+      mi = Math.max(1, Math.floor(mi / 2));
+    }
+    return { ...j, searchMiles: mi };
+  },
   parse: (j) => parseEcho(j),
-  note: (items, j) => (j && j.Results && j.Results.ClusterOutput && !(j.Results.Facilities || []).length ? 'Too many sites here; zoom in' : 'Red: violation now · amber: in last 3 years'),
+  note: (items, j) => (needsSmaller(j) ? 'Too many sites here; zoom in' : `Within ${j.searchMiles || '?'} mi of the centre · red: violation now · amber: in last 3 years`),
 });
 
-addProbe('EPA ECHO (Eatonton, 3 mi)', async (ctx) => parseEcho(await ctx.net.get(ctx.net.fillUrl(ENDPOINTS.peopleEcho, { lat: '33.3260', lon: '-83.3880', mi: 3 }), { timeoutMs: 30000 })).length);
+addProbe('EPA ECHO (Macon, 3 mi)', async (ctx) => parseEcho(await ctx.net.get(echoUrl(ctx, 32.8407, -83.6324, 3), { timeoutMs: 30000 })).length);

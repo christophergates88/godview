@@ -11,8 +11,11 @@ import { summarise } from '../js/layers/people-census.js';
 import { parseNotable } from '../js/layers/people-notable.js';
 import { recipients } from '../js/layers/people-money.js';
 import { parseEcho } from '../js/layers/people-epa.js';
-import { parseHome, hospitalPin } from '../js/layers/people-care.js';
-import { parseFdic } from '../js/layers/people-banks.js';
+import { parseCare } from '../js/layers/people-care.js';
+import { parseFdic, fdicUrl } from '../js/layers/people-banks.js';
+import { needsSmaller, echoUrl } from '../js/layers/people-epa.js';
+import { fromCensusReporter, parseCensusApi, VARS } from '../js/layers/people-census.js';
+import { fillUrl } from '../js/core/net.js';
 import { parseNcmec } from '../js/layers/people-missing.js';
 import { parseFema } from '../js/layers/people-fema.js';
 
@@ -20,9 +23,9 @@ let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('PASS ', name); } catch (e) { console.log('FAIL ', name, '—', e.message); process.exitCode = 1; } };
 
 // ---------------------------------------------------------------- privacy filter
-const ORGS = ['PUTNAM COUNTY BOARD OF COMMISSIONERS', 'City of Eatonton', 'GEORGIA POWER COMPANY', 'Lockheed Martin Corporation', 'ACME WIDGETS, INC.',
-  'Smith & Sons LLC', 'DELTA AIR LINES INC', 'UNITED STATES DEPARTMENT OF AGRICULTURE', 'Georgia College & State University', 'EATONTON WWTP',
-  'WALMART SUPERCENTER #1234', 'Oconee Regional Medical Center', 'First Baptist Church of Eatonton', 'TRI-COUNTY EMC', 'Atlanta Broadcasting Co'];
+const ORGS = ['BIBB COUNTY BOARD OF COMMISSIONERS', 'City of Macon', 'GEORGIA POWER COMPANY', 'Lockheed Martin Corporation', 'ACME WIDGETS, INC.',
+  'Smith & Sons LLC', 'DELTA AIR LINES INC', 'UNITED STATES DEPARTMENT OF AGRICULTURE', 'Georgia College & State University', 'MACON WWTP',
+  'WALMART SUPERCENTER #1234', 'Sample Regional Medical Center', 'First Baptist Church of Macon', 'TRI-COUNTY EMC', 'Atlanta Broadcasting Co'];
 const PERSONS = ['JOHN A SMITH', 'Smith, John', 'Mary Jones', 'JOHN SMITH JR', 'J. R. EWING', 'ROBERT E LEE III', 'SMITH RESIDENCE', 'The John Smith Revocable Trust',
   'Estate of Jane Doe', 'JANE Q PUBLIC MD', 'Bob Smith Private'];
 const WITHHELD = ['', 'REDACTED DUE TO PII', 'MULTIPLE RECIPIENTS', 'PRIVATE INDIVIDUAL', null];
@@ -38,7 +41,7 @@ t('privacy: strict mode shows only organizations', () => {
 });
 t('privacy: surnames that are also organization words do not unlock a name', () => {
   for (const s of ['John Church', 'Ann Mills', 'Tyrone Power', 'Jin Public', 'Mary Banks']) assert.equal(recordName(s, { mode: 'entity' }).show, false, s);
-  for (const s of ['Eatonton Fire Station 2', 'Mount Zion Baptist Church', 'Port of Brunswick']) assert.equal(recordName(s, { mode: 'strict' }).show, true, s);
+  for (const s of ['Macon Fire Station 2', 'Mount Zion Baptist Church', 'Port of Brunswick']) assert.equal(recordName(s, { mode: 'strict' }).show, true, s);
 });
 t('privacy: entity mode hides persons, shows organizations and unclear business names', () => {
   for (const s of ORGS) assert.equal(recordName(s, { mode: 'entity' }).show, true, s);
@@ -56,12 +59,12 @@ t('privacy: FAA registrant type codes override the name', () => {
 const where = parseIdentify(P.tigerIdentify());
 t('TIGERweb identify -> place, districts', () => {
   assert.equal(where.state.abbr, 'GA');
-  assert.equal(where.county.fips, '13237');
-  assert.equal(where.tract.code, '960204');
+  assert.equal(where.county.fips, '13021');
+  assert.equal(where.tract.code, '012500');
   assert.equal(where.cd.number, 10);
   assert.equal(where.sldu.base, '25');
   assert.equal(where.sldl.base, '144');
-  assert.match(where.place.name, /Eatonton/);
+  assert.match(where.place.name, /Macon/);
 });
 t('Congress number by date', () => {
   assert.equal(congressNow(new Date('2026-11-12')), 119);
@@ -113,7 +116,7 @@ t('Wikidata notable people (deduped, fanned out, https links)', () => {
 });
 t('USAspending: persons counted, not named', () => {
   const r = recipients(P.usaspending().results);
-  assert.deepEqual(r.shown.map((x) => x.name), ['Putnam County Board Of Education', 'Georgia Power Company']);
+  assert.deepEqual(r.shown.map((x) => x.name), ['Bibb County Board Of Education', 'Georgia Power Company']);
   assert.equal(r.hidden, 2);
 });
 t('EPA ECHO: violation colours; person-named site shown without name or street', () => {
@@ -125,20 +128,48 @@ t('EPA ECHO: violation colours; person-named site shown without name or street',
   assert.ok(!JSON.stringify(f[2]).includes('Smith') && !JSON.stringify(f[2]).includes('Elm'));
   assert.equal(f[2].link, null);
 });
-t('CMS nursing home and hospital pin', () => {
-  const h = parseHome(P.cmsNursing().results[0]);
-  assert.match(h.rows[0][1], /2 of 5/);
-  assert.ok(h.rows.some((r) => r[0] === 'Warnings'));
-  const pin = hospitalPin(P.cmsHospitals().results, where.county);
-  assert.match(pin.title, /Putnam/);
-  assert.match(pin.rows[0][1], /3 of 5.*ER/);
+t('OpenStreetMap care places: hospital and nursing home shown, person-named care home withheld', () => {
+  const c = parseCare(P.osmCare());
+  assert.equal(c.length, 3);                                   // duplicate element dropped
+  assert.equal(c[0].title, 'Sample County Hospital');
+  assert.ok(c[0].links.some((l) => /medicare\.gov\/care-compare/.test(l.href)));
+  assert.match(c[2].title, /private name not shown/);
+  assert.ok(!JSON.stringify(c[2]).includes('Mary') && !JSON.stringify(c[2]).includes('Elm'));
 });
 t('FDIC branches', () => { const b = parseFdic(P.fdic()); assert.equal(b.length, 2); assert.equal(b[0].color, '#ffd34d'); });
+t('FDIC request uses the documented filter form', () => {
+  const u = new URL(fdicUrl({ net: { fillUrl } }, 'GA'));
+  console.log('      FDIC URL:', u.href);
+  assert.equal(u.hostname, 'api.fdic.gov');
+  assert.equal(u.pathname, '/banks/locations');
+  assert.equal(u.searchParams.get('filters'), 'STALP:GA');
+  assert.ok(u.searchParams.get('fields').split(',').includes('LATITUDE'));
+});
+t('ECHO: clusters or rows-without-sites mean "search smaller"', () => {
+  assert.equal(needsSmaller({ Results: { ClusterOutput: { ClusterData: [] } } }), true);
+  assert.equal(needsSmaller({ Results: { QueryRows: '2400', Facilities: [] } }), true);
+  assert.equal(needsSmaller(P.echo()), false);
+  assert.match(echoUrl({ net: { fillUrl } }, 32.84, -83.63, 10), /p_radius=10&/);
+});
+t('Census Reporter answer -> same numbers as the Census API', () => {
+  const [head, vals] = P.acs();
+  const est = {};
+  head.forEach((k, i) => { if (/^[BC]\d/.test(k)) { const [t, c] = k.split('_'); (est[t] = est[t] || { estimate: {}, error: {} }).estimate[t + c.replace(/E$/, '')] = Number(vals[i]); } });
+  const j = { release: { years: '2020-2024' }, geography: { '05000US13021': { name: 'Bibb County, GA' } }, data: { '05000US13021': est } };
+  const table = fromCensusReporter(j, '05000US13021');
+  assert.equal(table[0], VARS);
+  assert.deepEqual(summarise(table).stats, summarise(P.acs()).stats);
+});
+t('Census API HTML error pages are reported plainly', () => {
+  assert.throws(() => parseCensusApi('<html><title>Missing Key</title></html>'), /key missing/);
+  assert.throws(() => parseCensusApi('<html><title>Invalid Key</title></html>'), /not valid/);
+  assert.deepEqual(parseCensusApi('[["NAME"],["x"]]'), [['NAME'], ['x']]);
+});
 t('NCMEC RSS: poster text kept verbatim, town parsed, https', () => {
   const p = parseNcmec(P.ncmecRss());
   assert.equal(p.length, 2);
   assert.equal(p[0].text, P.NCMEC_TEXT);
-  assert.equal(p[0].city, 'EATONTON');
+  assert.equal(p[0].city, 'MACON');
   assert.ok(p[0].image.startsWith('https://') && p[0].link.startsWith('https://'));
 });
 t('FEMA declarations deduped', () => assert.equal(parseFema(P.fema()).length, 2));

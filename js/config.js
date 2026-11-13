@@ -255,14 +255,14 @@ Object.assign(ENDPOINTS, {
   peopleOpenStatesGeo: 'https://v3.openstates.org/people.geo?lat={lat}&lng={lon}&include=links&apikey={key}',
   peopleFecTotals: 'https://api.open.fec.gov/v1/candidate/{id}/totals/?api_key={key}&sort=-cycle&per_page=1',
   peopleSparql: 'https://query.wikidata.org/sparql?format=json&query={q}',
-  peopleAcs: 'https://api.census.gov/data/{year}/acs/acs5?get={vars}&for={for}&in={in}',
+  // Census numbers: Census Reporter (keyless, CORS) first; the Census API (needs a free key, via the relay) as fallback.
+  peopleCensusReporter: 'https://api.censusreporter.org/1.0/data/show/latest?table_ids={tables}&geo_ids={geos}',
+  peopleAcs: 'https://api.census.gov/data/{year}/acs/acs5?get={vars}&for={for}&in={in}&key={key}',
   peopleAcsYears: [2024, 2023],
   peopleUsaspending: 'https://api.usaspending.gov/api/v2/search/spending_by_category/recipient/',
   peopleEcho: 'https://echodata.epa.gov/echo/echo_rest_services.get_facility_info?output=JSON&p_lat={lat}&p_long={lon}&p_radius={mi}&p_act=Y&responseset=500',
-  peopleCms: 'https://data.cms.gov/provider-data/api/1/datastore/query/{id}/0?limit=500&offset={offset}',
-  peopleCmsNursingHomes: '4pq5-n9py',
-  peopleCmsHospitals: 'xubh-q36u',
-  peopleFdic: 'https://api.fdic.gov/banks/locations?filters={f}&fields=NAME,OFFNAME,ADDRESS,CITY,STALP,LATITUDE,LONGITUDE,SERVTYPE,ESTYMD,CERT,MAINOFF,UNINUMBR&limit=500',
+  // One state at a time (filters=STALP:GA, the documented form), nearest ones kept in the browser.
+  peopleFdic: 'https://api.fdic.gov/banks/locations?filters={f}&fields=NAME,OFFNAME,ADDRESS,CITY,STALP,LATITUDE,LONGITUDE,SERVTYPE,ESTYMD,CERT,MAINOFF,UNINUMBR&limit=10000',
   peopleNcmec: 'https://www.missingkids.org/missingkids/servlet/XmlServlet?act=rss&LanguageCountry=en_US&orgPrefix=NCMC&state={st}',
   peopleFema: 'https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?$filter={f}&$orderby=declarationDate%20desc&$top=40',
 });
@@ -273,9 +273,9 @@ Object.assign(RELAY_HOSTS, {
   'data.openstates.org': 'fallback',
   'v3.openstates.org': 'fallback',
   'api.open.fec.gov': 'fallback',
-  'api.census.gov': 'fallback',
+  'api.census.gov': 'only',          // no CORS; needs a key
+  'api.censusreporter.org': 'fallback',
   'echodata.epa.gov': 'fallback',
-  'data.cms.gov': 'fallback',
   'api.fdic.gov': 'fallback',
   'www.fema.gov': 'fallback',
   'www.missingkids.org': 'only',
@@ -286,6 +286,7 @@ Object.assign(RELAY_HOSTS, {
 Object.assign(KEYS, {
   openstates: { name: 'Open States API key (optional)', url: 'https://open.pluralpolicy.com/accounts/profile/' },
   fec: { name: 'api.data.gov key for FEC (optional)', url: 'https://api.data.gov/signup/' },
+  census: { name: 'Census API key (optional backup source)', url: 'https://api.census.gov/data/key_signup.html' },
 });
 
 Object.assign(INTERVALS, {

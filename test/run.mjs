@@ -376,6 +376,7 @@ async function screenPos(page, layer, key) {
   await page.evaluate(() => window.GodView.layers.forEach((l, i) => setTimeout(() => window.GodView.manager.enable(l.id, true), i * 60)));
   await page.waitForTimeout(9000);
   console.log('   overpass requests:', counts['overpass-api.de'], 'relay overpass:', counts['relay:overpass-api.de']);
+  await waitLayers(page, ['peopleCare']); // People & records: OpenStreetMap queries queue one at a time behind the other Overpass layers
   const st = await page.evaluate(() => Object.fromEntries(window.GodView.layers.map((l) => [l.id, { status: window.GodView.manager.state[l.id].status, count: window.GodView.manager.state[l.id].count, msg: window.GodView.manager.state[l.id].message, via: window.GodView.manager.state[l.id].via }])));
   const notOk = Object.entries(st).filter(([, v]) => v.status !== 'ok');
   check('all layers on: every one loads', notOk.length === 0, notOk.map(([k, v]) => `${k}:${v.status} ${v.msg}`).join(' | '));
@@ -391,7 +392,7 @@ async function screenPos(page, layer, key) {
       const d = M.describe('peopleOfficials', 'here');
       const c = M.describe('peopleCensus', 'tract');
       const epa = M.layers.find((l) => l.id === 'peopleEpa').items().map((i) => i.title);
-      const money = M.describe('peopleMoney', '13237');
+      const money = M.describe('peopleMoney', '13021');
       return { rows: d && d.rows.map((r) => r[0]), links: d && d.links.length, stats: c && c.stats.length, epa, money: money && money.rows.map((r) => r[1]).join(' | ') };
     });
     check('[people] officials card: senators, representative, governor, state legislators + links', !!ppl.rows && ['US Senator', 'US Representative', 'Governor', 'State senator', 'State representative'].every((k) => ppl.rows.includes(k)) && ppl.links >= 6, JSON.stringify(ppl.rows));
@@ -409,7 +410,7 @@ async function screenPos(page, layer, key) {
     const pp = await screenPos(page, 'peopleOfficials', 'here');
     if (opened && pp) { await page.mouse.click(pp.x, pp.y); await page.waitForTimeout(1500); }
     const cardInfo = await page.evaluate(() => ({ title: document.getElementById('card-title').textContent, links: document.querySelectorAll('#card-extra .gv-links a').length, rows: document.getElementById('card-rows').innerText }));
-    check('[people] tap opens officials card with link buttons and campaign totals', /Putnam County/.test(cardInfo.title) && cardInfo.links >= 6 && /Raised \$12\.3M/.test(cardInfo.rows), `${cardInfo.title} links=${cardInfo.links} ${cardInfo.rows.replace(/\s+/g, ' ').slice(0, 160)}`);
+    check('[people] tap opens officials card with link buttons and campaign totals', /Bibb County/.test(cardInfo.title) && cardInfo.links >= 6 && /Raised \$12\.3M/.test(cardInfo.rows), `${cardInfo.title} links=${cardInfo.links} ${cardInfo.rows.replace(/\s+/g, ' ').slice(0, 160)}`);
     await page.screenshot({ path: path.join(outDir, 'desktop-people-officials.png') });
     await page.click('#card-close');
   }

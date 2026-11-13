@@ -219,21 +219,22 @@ addresses are never shown (they can be home addresses).
 | Layer | Source | Via | Notes |
 |---|---|---|---|
 | Who's in charge here | Census TIGERweb (districts), @unitedstates congress-legislators, Open States CSV, Wikidata, OpenFEC | Direct (relay fallback) | Senators, representative, governor, state legislators, school district; official links; campaign committee totals load when the card opens (FEC DEMO_KEY: ~30 calls/hour). Also adds its rows when you tap bare ground while it is on. No local officials (no open nationwide source). |
-| The people here (Census) | Census ACS 5-year (2020–2024) | Direct (relay fallback) | Tract and county: a few big numbers, never individuals |
+| The people here (Census) | Census ACS 5-year (2020–2024) via Census Reporter; backup: Census Data API | Direct (backup: key `census` + relay) | Tract and county: a few big numbers, never individuals. The Census API itself needs a free key and has no CORS, so it is only a backup |
 | Notable people born here | Wikidata + Wikipedia | Direct | Only people with an English Wikipedia article, at their birthplace |
 | Federal money here | USAspending.gov | Direct (POST; no relay possible) | Top contract and grant recipients in the county, last 12 months; persons counted, never named |
-| EPA-regulated sites | EPA ECHO | Direct (relay fallback) | Inspections, violations, penalties; red = violation now |
-| Nursing home & hospital ratings | CMS Provider Data | Direct (relay fallback) | Nursing homes on the map; county hospitals on one pin |
-| Bank branches (FDIC) | FDIC BankFind | Direct (relay fallback) | |
+| EPA-regulated sites | EPA ECHO | Direct (relay fallback) | Up to 10 miles round the view centre (smaller where sites are dense); inspections, violations, penalties; red = violation now |
+| Hospitals & nursing homes | OpenStreetMap via Overpass | Direct (relay fallback) | Locations only, with a link to Medicare Care Compare for official star ratings (CMS's own data service blocks web pages and the relay) |
+| Bank branches (FDIC) | FDIC BankFind | Direct (relay fallback) | One state per request; nearest branches kept |
 | Disaster declarations (FEMA) | OpenFEMA | Direct (relay fallback) | County and statewide declarations |
 | Missing children (NCMEC) | NCMEC state RSS | Relay | Official posters only, unchanged; placed at the town they name. Not AMBER Alerts. |
 
 Optional keys (Settings > API keys): Open States (state legislators straight from
-its API) and an api.data.gov key for the FEC (higher limit than DEMO_KEY).
+its API), an api.data.gov key for the FEC (higher limit than DEMO_KEY) and a
+Census API key (backup for the Census numbers; free at api.census.gov/data/key_signup.html).
 Relay hosts used by this group (add to `ALLOWED_HOSTS` in the worker):
 `www.missingkids.org` (needed), and as fallbacks `tigerweb.geo.census.gov`,
-`data.openstates.org`, `v3.openstates.org`, `api.open.fec.gov`, `api.census.gov`,
-`echodata.epa.gov`, `data.cms.gov`, `api.fdic.gov`, `www.fema.gov`.
+`data.openstates.org`, `v3.openstates.org`, `api.open.fec.gov`, `api.censusreporter.org`,
+`echodata.epa.gov`, `api.fdic.gov`, `www.fema.gov`; `api.census.gov` always goes through the relay.
 
 `GodView.selfTest()` checks each layer's main fetch. To check every source this
 group uses (each one once), run `await GodViewPeople.check()` in the console.

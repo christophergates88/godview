@@ -79,4 +79,4 @@ export default makePointLayer({
   describe: (it) => ({ title: it.title, subtitle: it.subtitle, rows: it.rows, links: it.links, link: it.link }),
 });
 
-addProbe('USAspending (POST, Putnam County GA)', async (ctx) => (await postJSON(ctx, ENDPOINTS.peopleUsaspending, body({ state: { abbr: 'GA' }, county: { code: '237' } }, TYPES.grants))).results.length);
+addProbe('USAspending (POST, Bibb County GA)', async (ctx) => (await postJSON(ctx, ENDPOINTS.peopleUsaspending, body({ state: { abbr: 'GA' }, county: { code: '021' } }, TYPES.grants))).results.length);

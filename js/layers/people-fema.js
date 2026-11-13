@@ -51,4 +51,4 @@ export default makePointLayer({
   describe: (it) => ({ title: it.title, subtitle: it.subtitle, rows: it.rows, links: it.links }),
 });
 
-addProbe('OpenFEMA (Putnam County GA)', async (ctx) => parseFema(await ctx.net.get(ctx.net.fillUrl(ENDPOINTS.peopleFema, { f: femaFilter('13', '237') }))).length);
+addProbe('OpenFEMA (Bibb County GA)', async (ctx) => parseFema(await ctx.net.get(ctx.net.fillUrl(ENDPOINTS.peopleFema, { f: femaFilter('13', '021') }))).length);
