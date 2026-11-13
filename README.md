@@ -268,6 +268,12 @@ route, client).
 
 **Alerts:** "act now" always notifies; "heads-up" notifies except in quiet hours
 (10 PM–6 AM), when it waits for the morning brief; "info" only goes in the brief.
+For weather, "act now" means what the National Weather Service itself sends to
+phones as emergency alerts (tornado, flash flood, extreme wind, hurricane, storm
+surge, tsunami, snow squall, dust storm, evacuation, shelter in place, and severe
+thunderstorms tagged "destructive") or anything it rates Extreme; other warnings
+(severe thunderstorm, freeze, winter storm, heat), watches and advisories are
+heads-ups. The app's Now tab and map pill use the same rule.
 Nothing repeats. "Possibly" items (see below) are always marked as guesses. Places live only in your own Cloudflare storage, never in this
 code. The brief is worded by AI using only the facts: Cloudflare Workers AI by
 default (no key; if it writes a number that is not in the facts, the rule-based
