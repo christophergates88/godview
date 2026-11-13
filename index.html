@@ -24,6 +24,10 @@
       <svg class="search-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
       <input id="search-input" type="search" inputmode="search" enterkeyhint="search" placeholder="Search places or lat, lon" aria-label="Search places">
     </form>
+    <button id="btn-watch" class="icon-btn" aria-label="Watch: places, alerts, brief" title="Watch">
+      <svg viewBox="0 0 24 24"><path d="M6 10a6 6 0 0 1 12 0v4l2 3H4l2-3z M10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+      <i id="watch-badge" class="badge" hidden></i>
+    </button>
     <button id="btn-brief" class="icon-btn" aria-label="What's here" title="What's here (briefing)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
     </button>
@@ -81,6 +85,23 @@
       <button id="card-play" class="btn primary" hidden>Play</button>
       <button id="card-fly" class="btn">Fly to</button>
       <a id="card-link" class="btn" target="_blank" rel="noopener" hidden>Source</a>
+    </div>
+  </section>
+
+  <!-- Watch: places, alerts, brief -->
+  <section id="watch" class="modal watch" hidden aria-label="Watch">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <div class="seg" id="watch-tabs" role="tablist">
+          <button data-tab="places" class="on">Places</button>
+          <button data-tab="alerts">Alerts</button>
+          <button data-tab="brief">Brief</button>
+        </div>
+        <button id="watch-close" class="icon-btn small" aria-label="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div id="watch-body" class="modal-body"></div>
     </div>
   </section>
 

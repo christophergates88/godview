@@ -7,6 +7,7 @@ import { fmt, escapeHtml } from './core/units.js';
 import { fetchJSON, fillUrl, cache } from './core/net.js';
 import * as globe from './globe.js';
 import { buildBrief } from './brief.js';
+import * as watch from './watch.js';
 
 const $ = (id) => document.getElementById(id);
 const Cesium = () => window.Cesium;
@@ -27,6 +28,7 @@ export function initUI(opts) {
   initBrief();
   initSettings();
   initHud();
+  watch.initWatch({ toast });
   globe.onTap(onTap);
   M.onStatus((id) => {
     if (id === 'tick') { refreshAllStatus(); cardTick(); return; }
@@ -300,6 +302,7 @@ function setFollowBtn(on) {
 
 function onTap(hit) {
   if (!hit) return;
+  if (hit.lat != null && !hit.layer && watch.handleGlobeTap(hit.lat, hit.lon)) return; // adding a place
   if (hit.layer) {
     const d = M.describe(hit.layer, hit.key);
     if (d) { openItem(hit.layer, hit.key, d); return; }
@@ -467,8 +470,18 @@ async function openBrief(lat, lon, label) {
   me.addEventListener('click', () => locate((la, lo) => openBrief(la, lo, 'My location')));
   showCard();
   const mine = current;
-  const sections = await buildBrief(M, LAYERS, { lat, lon });
+  const [sections, server] = await Promise.all([buildBrief(M, LAYERS, { lat, lon }), watch.pointBrief(lat, lon)]);
   if (current !== mine) return;
+  if (server) {
+    // The watch service checked this point the same way it watches saved places.
+    const lines = [];
+    for (const e of server.events || []) lines.push(`${e.sev === 'act now' ? 'ACT NOW: ' : e.sev === 'heads-up' ? 'Heads-up: ' : ''}${e.text}${e.todo ? ' ' + e.todo : ''}`);
+    if (server.outlook) lines.push(`Storm outlook: ${server.outlook}.`);
+    for (const x of server.sky || []) lines.push(x);
+    for (const d of server.todo || []) lines.push(`Do: ${d}`);
+    if (!lines.length) lines.push('Nothing to flag here right now.');
+    sections.unshift({ title: 'Watch check', lines });
+  }
   box.innerHTML = sections.map((s) => `<h4>${escapeHtml(s.title)}</h4><ul>${s.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`).join('');
   if (label !== 'My location') box.appendChild(me);
 }

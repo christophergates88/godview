@@ -5,6 +5,7 @@ import { LayerManager } from './core/layer-manager.js';
 import { settings } from './core/settings.js';
 import * as globe from './globe.js';
 import { initUI } from './ui.js';
+import { watchSelfTest } from './watch.js';
 
 export async function start() {
   const viewer = globe.createGlobe('globe', 'credits');
@@ -29,5 +30,5 @@ export async function start() {
 
   // Handy for debugging in the browser console: GodView.manager.state
   // GodView.selfTest() checks every data source once (see README).
-  window.GodView = { viewer, manager, settings, layers: LAYERS, globe, selfTest: (opts) => manager.selfTest(opts) };
+  window.GodView = { viewer, manager, settings, layers: LAYERS, globe, selfTest: (opts) => manager.selfTest(opts), watchSelfTest };
 }

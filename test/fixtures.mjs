@@ -51,7 +51,7 @@ export const nws = () => ({
   features: [
     { id: 'https://api.weather.gov/alerts/urn:oid:test.1', type: 'Feature',
       geometry: { type: 'Polygon', coordinates: [[[-84.0, 33.0], [-83.0, 33.0], [-83.0, 33.6], [-84.0, 33.6], [-84.0, 33.0]]] },
-      properties: { id: 'urn:oid:test.1', areaDesc: 'Putnam; Baldwin', sent: iso(now), effective: iso(now - 3600e3), onset: iso(now - 3600e3), expires: iso(now + 3 * 3600e3), ends: iso(now + 3 * 3600e3), status: 'Actual', messageType: 'Alert', severity: 'Severe', certainty: 'Observed', urgency: 'Immediate', event: 'Severe Thunderstorm Warning', senderName: 'NWS Peachtree City GA', headline: 'Severe Thunderstorm Warning issued (sample)', description: 'SAMPLE TEXT. At 405 PM EST, a severe thunderstorm was located ...' } },
+      properties: { id: 'urn:oid:test.1', areaDesc: 'Sample; Other', sent: iso(now), effective: iso(now - 3600e3), onset: iso(now - 3600e3), expires: iso(now + 3 * 3600e3), ends: iso(now + 3 * 3600e3), status: 'Actual', messageType: 'Alert', severity: 'Severe', certainty: 'Observed', urgency: 'Immediate', event: 'Severe Thunderstorm Warning', senderName: 'NWS Peachtree City GA', headline: 'Severe Thunderstorm Warning issued (sample)', description: 'SAMPLE TEXT. At 405 PM EST, a severe thunderstorm was located ...' } },
     { id: 'https://api.weather.gov/alerts/urn:oid:test.2', type: 'Feature', geometry: null,
       properties: { id: 'urn:oid:test.2', areaDesc: 'Coastal zone sample', effective: iso(now), expires: iso(now + 86400e3), severity: 'Minor', certainty: 'Likely', urgency: 'Expected', event: 'Small Craft Advisory', senderName: 'NWS Sample', headline: 'Sample advisory' } },
   ],
@@ -78,7 +78,7 @@ export const geocode = () => ({
 });
 
 export const nominatim = () => ([
-  { place_id: 1, lat: '33.3240', lon: '-83.3880', display_name: '103 Example St, Sampleville, Putnam County, Georgia, 31024, United States', boundingbox: ['33.3239', '33.3241', '-83.3881', '-83.3879'], name: '103 Example St' },
+  { place_id: 1, lat: '33.3240', lon: '-83.3880', display_name: '1 Sample Ave, Sampleville, Sample County, Georgia, 00000, United States', boundingbox: ['33.3239', '33.3241', '-83.3881', '-83.3879'], name: '1 Sample Ave' },
 ]);
 
 // OpenSky /states/all format: arrays in fixed field order.
@@ -131,9 +131,9 @@ FPKG1   32.035  -80.903  2026 11 12 19 54 350  4.1   5.1   MM   MM   MM  MM 1018
 `;
 
 export const spcCsv = () => `Time,F_Scale,Location,County,State,Lat,Lon,Comments
-1905,UNK,2 N Sampleville,Putnam,GA,33.35,-83.38,Brief tornado reported by spotter. (FFC)
+1905,UNK,2 N Sampleville,Sample,GA,33.35,-83.38,Brief tornado reported by spotter. (FFC)
 Time,Speed,Location,County,State,Lat,Lon,Comments
-1910,UNK,Eatonton,Putnam,GA,33.33,-83.39,"Trees down, one on a house. (FFC)"
+1910,UNK,Sampletown,Sample,GA,33.33,-83.39,"Trees down, one on a house. (FFC)"
 Time,Size,Location,County,State,Lat,Lon,Comments
 1920,100,Milledgeville,Baldwin,GA,33.08,-83.23,Quarter size hail. (FFC)
 `;
@@ -147,7 +147,7 @@ export const openMeteoGrid = (n) => Array.from({ length: n }, (_, i) => ({ latit
 
 export const perimeters = () => ({ type: 'FeatureCollection', features: [{ type: 'Feature', id: 11, geometry: { type: 'Polygon', coordinates: [[[-83.6, 33.5], [-83.5, 33.5], [-83.5, 33.6], [-83.6, 33.6], [-83.6, 33.5]]] }, properties: { poly_IncidentName: 'Sample Creek', attr_IncidentSize: 812, attr_PercentContained: 40, poly_GISAcres: 805.2, attr_FireDiscoveryDateTime: now - 3 * 86400e3, attr_POOState: 'US-GA' } }] });
 export const incidents = () => ({ type: 'FeatureCollection', features: [
-  { type: 'Feature', id: 1, geometry: { type: 'Point', coordinates: [-83.55, 33.55] }, properties: { IncidentName: 'Sample Creek', IncidentSize: 812, PercentContained: 40, FireDiscoveryDateTime: now - 3 * 86400e3, POOState: 'US-GA', POOCounty: 'Putnam', UniqueFireIdentifier: '2026-GAXXX-000123' } },
+  { type: 'Feature', id: 1, geometry: { type: 'Point', coordinates: [-83.55, 33.55] }, properties: { IncidentName: 'Sample Creek', IncidentSize: 812, PercentContained: 40, FireDiscoveryDateTime: now - 3 * 86400e3, POOState: 'US-GA', POOCounty: 'Sample', UniqueFireIdentifier: '2026-GAXXX-000123' } },
   { type: 'Feature', id: 2, geometry: { type: 'Point', coordinates: [-120.5, 38.5] }, properties: { IncidentName: 'Sample Ridge', IncidentSize: 50, PercentContained: 0, FireDiscoveryDateTime: now - 86400e3, POOState: 'US-CA', POOCounty: 'El Dorado', UniqueFireIdentifier: '2026-CAXXX-000456' } },
 ] });
 export const firmsCsv = () => `latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight
@@ -164,7 +164,7 @@ export const drought = () => ({ type: 'FeatureCollection', features: [
   { type: 'Feature', properties: { DM: 2 }, geometry: { type: 'Polygon', coordinates: [[[-84, 31.5], [-83, 31.5], [-83, 32.5], [-84, 32.5], [-84, 31.5]]] } },
 ] });
 export const ga511Cams = () => ([
-  { Id: 186, Source: 'GDOT', SourceId: '186', Roadway: 'SR 44', Direction: 'Northbound', Latitude: 33.33, Longitude: -83.39, Location: 'SR 44 at Sample Rd (Putnam)', SortOrder: 0, Name: 'GDOT-PUT-0001', Views: [{ Id: 186, Url: 'https://511ga.org/map/Cctv/186', Status: 'Enabled', Description: 'sample' }] },
+  { Id: 186, Source: 'GDOT', SourceId: '186', Roadway: 'SR 44', Direction: 'Northbound', Latitude: 33.33, Longitude: -83.39, Location: 'SR 44 at Sample Rd (Sample)', SortOrder: 0, Name: 'GDOT-SMP-0001', Views: [{ Id: 186, Url: 'https://511ga.org/map/Cctv/186', Status: 'Enabled', Description: 'sample' }] },
   { Id: 187, Source: 'GDOT', Roadway: 'I-75', Direction: 'Southbound', Latitude: 33.75, Longitude: -84.39, Location: 'I-75 at 10th St (Fulton)', Views: [{ Id: 187, Url: 'https://511ga.org/map/Cctv/187', Status: 'Enabled' }] },
 ]);
 export const ga511Events = () => ([{ ID: 'E1', SourceId: 's', Organization: 'GDOT', RoadwayName: 'I-16', DirectionOfTravel: 'Eastbound', Description: 'Crash blocking right lane (sample).', Reported: Math.floor(now / 1000) - 3600, LastUpdated: Math.floor(now / 1000) - 600, StartDate: Math.floor(now / 1000) - 3600, EventType: 'accidentsAndIncidents', Subtype: 'crash', Severity: '2', LanesAffected: 'Right lane', Latitude: 32.8, Longitude: -83.6 }]);
@@ -184,6 +184,6 @@ export const radio = () => ([
   { stationuuid: 'r1', name: 'Sample FM', url_resolved: 'https://stream.example.invalid/live.mp3', homepage: 'https://example.invalid', tags: 'news,talk', country: 'United States', state: 'Georgia', language: 'english', codec: 'MP3', bitrate: 128, geo_lat: 33.32, geo_long: -83.39 },
   { stationuuid: 'r2', name: 'Old AM', url_resolved: 'http://insecure.example.invalid/live', tags: 'country', country: 'United States', state: 'Georgia', geo_lat: 33.32, geo_long: -83.39 },
 ]);
-export const wikiGeo = () => ({ batchcomplete: '', query: { geosearch: [{ pageid: 123, ns: 0, title: 'Eatonton, Georgia', lat: 33.3268, lon: -83.3885, dist: 3100.5, primary: '' }] } });
-export const wikiSummary = () => ({ title: 'Eatonton, Georgia', extract: 'Eatonton is a city in Putnam County, Georgia (sample text).', thumbnail: { source: 'https://upload.wikimedia.org/sample.jpg' } });
+export const wikiGeo = () => ({ batchcomplete: '', query: { geosearch: [{ pageid: 123, ns: 0, title: 'Sampletown, Georgia', lat: 33.3268, lon: -83.3885, dist: 3100.5, primary: '' }] } });
+export const wikiSummary = () => ({ title: 'Sampletown, Georgia', extract: 'Sampletown is a city in Sample County, Georgia (sample text).', thumbnail: { source: 'https://upload.wikimedia.org/sample.jpg' } });
 export const inat = () => ({ total_results: 1, results: [{ id: 999, species_guess: 'Northern Cardinal', taxon: { name: 'Cardinalis cardinalis', preferred_common_name: 'Northern Cardinal', iconic_taxon_name: 'Aves' }, geojson: { type: 'Point', coordinates: [-83.4, 33.3] }, observed_on: '2026-11-10', user: { login: 'sample_user' }, quality_grade: 'research', photos: [{ url: 'https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.jpg' }], uri: 'https://www.inaturalist.org/observations/999' }] });
