@@ -181,7 +181,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.evaluate(() => window.GodView.globe.jumpTo(33.3, -83.4, 330));
   await page.waitForTimeout(2500);
   const nLayers = await page.evaluate(() => window.GodView.layers.length);
-  check('registry has 25-50 layers', nLayers >= 25 && nLayers <= 50, String(nLayers));
+  check('registry has 25-60 layers', nLayers >= 25 && nLayers <= 60, String(nLayers));
 
   // Self-test: must resolve, cover every layer, and not change saved settings.
   const before = await page.evaluate(() => localStorage.getItem('godview.settings.v1'));
@@ -200,6 +200,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.evaluate(() => window.GodView.layers.forEach((l, i) => setTimeout(() => window.GodView.manager.enable(l.id, true), i * 60)));
   await page.waitForTimeout(9000);
   console.log('   overpass requests:', counts['overpass-api.de'], 'relay overpass:', counts['relay:overpass-api.de']);
+  await waitLayers(page, ['peopleCare']); // People & records: OpenStreetMap queries queue one at a time behind the other Overpass layers
   const st = await page.evaluate(() => Object.fromEntries(window.GodView.layers.map((l) => [l.id, { status: window.GodView.manager.state[l.id].status, count: window.GodView.manager.state[l.id].count, msg: window.GodView.manager.state[l.id].message, via: window.GodView.manager.state[l.id].via }])));
   const notOk = Object.entries(st).filter(([, v]) => v.status !== 'ok');
   check('all layers on: every one loads', notOk.length === 0, notOk.map(([k, v]) => `${k}:${v.status} ${v.msg}`).join(' | '));
@@ -207,6 +208,36 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   const empty = Object.entries(st).filter(([k, v]) => v.count === 0 && !['caltrans', 'bikeshare', 'cellTowers'].includes(k));
   check('all layers on: sample items drawn', empty.length === 0, empty.map(([k]) => k).join(', '));
   await page.screenshot({ path: path.join(outDir, 'desktop-all-layers.png') });
+
+  // People & records: cards with official links and big numbers; tapped-point officials; privacy.
+  {
+    const ppl = await page.evaluate(() => {
+      const M = window.GodView.manager;
+      const d = M.describe('peopleOfficials', 'here');
+      const c = M.describe('peopleCensus', 'tract');
+      const epa = M.layers.find((l) => l.id === 'peopleEpa').items().map((i) => i.title);
+      const money = M.describe('peopleMoney', '13021');
+      return { rows: d && d.rows.map((r) => r[0]), links: d && d.links.length, stats: c && c.stats.length, epa, money: money && money.rows.map((r) => r[1]).join(' | ') };
+    });
+    check('[people] officials card: senators, representative, governor, state legislators + links', !!ppl.rows && ['US Senator', 'US Representative', 'Governor', 'State senator', 'State representative'].every((k) => ppl.rows.includes(k)) && ppl.links >= 6, JSON.stringify(ppl.rows));
+    check('[people] census card has big numbers', ppl.stats === 6, String(ppl.stats));
+    check('[people] person-named EPA site shown without its name', ppl.epa.includes('Private site') && !ppl.epa.some((x) => /Smith/i.test(x)), ppl.epa.join(', '));
+    check('[people] federal money card names organizations only', /Board Of Education/.test(ppl.money || '') && !/SAMPLEFARMER/i.test(ppl.money || '') && /not named/.test(ppl.money || ''), ppl.money);
+    // Open the officials card the way a tap does, and check links + FEC details render
+    const opened = await page.evaluate(async () => {
+      const G = window.GodView; const p = G.manager.position('peopleOfficials', 'here');
+      const C = window.Cesium; const c = C.Cartographic.fromCartesian(p);
+      G.globe.jumpTo(C.Math.toDegrees(c.latitude), C.Math.toDegrees(c.longitude), 20);
+      return true;
+    });
+    await page.waitForTimeout(1200);
+    const pp = await screenPos(page, 'peopleOfficials', 'here');
+    if (opened && pp) { await page.mouse.click(pp.x, pp.y); await page.waitForTimeout(1500); }
+    const cardInfo = await page.evaluate(() => ({ title: document.getElementById('card-title').textContent, links: document.querySelectorAll('#card-extra .gv-links a').length, rows: document.getElementById('card-rows').innerText }));
+    check('[people] tap opens officials card with link buttons and campaign totals', /Bibb County/.test(cardInfo.title) && cardInfo.links >= 6 && /Raised \$12\.3M/.test(cardInfo.rows), `${cardInfo.title} links=${cardInfo.links} ${cardInfo.rows.replace(/\s+/g, ' ').slice(0, 160)}`);
+    await page.screenshot({ path: path.join(outDir, 'desktop-people-officials.png') });
+    await page.click('#card-close');
+  }
 
   // Group panel: filter, collapse, all-off
   await page.fill('#layer-filter', 'camera');
@@ -236,7 +267,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   fs.writeFileSync(path.join(outDir, 'brief-sample.txt'), brief);
   await page.screenshot({ path: path.join(outDir, 'desktop-brief.png') });
 
-  check('relay used only for relay hosts', Object.keys(counts).filter((k) => k.startsWith('relay:')).every((k) => ['relay:api.adsb.lol', 'relay:nasstatus.faa.gov', 'relay:www.ndbc.noaa.gov', 'relay:www.nhc.noaa.gov', 'relay:droughtmonitor.unl.edu', 'relay:www.submarinecablemap.com', 'relay:511ga.org'].includes(k)), Object.keys(counts).filter((k) => k.startsWith('relay:')).join(','));
+  check('relay used only for relay hosts', Object.keys(counts).filter((k) => k.startsWith('relay:')).every((k) => ['relay:api.adsb.lol', 'relay:nasstatus.faa.gov', 'relay:www.ndbc.noaa.gov', 'relay:www.nhc.noaa.gov', 'relay:droughtmonitor.unl.edu', 'relay:www.submarinecablemap.com', 'relay:511ga.org', 'relay:www.missingkids.org'].includes(k)), Object.keys(counts).filter((k) => k.startsWith('relay:')).join(','));
   const realErrors = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource/.test(e));
   check('[all layers] no unexpected console errors', realErrors.length === 0, realErrors.slice(0, 5).join(' | '));
   await context.close();

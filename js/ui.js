@@ -358,7 +358,7 @@ export function closeCard() {
   document.body.classList.remove('card-open');
 }
 
-function fillCard({ kicker, title, subtitle, rows, text, link, accent, image, say, credit }) {
+function fillCard({ kicker, title, subtitle, rows, text, link, accent, image, say, credit, links, stats }) {
   const card = $('card');
   card.classList.remove('brief');
   card.style.setProperty('--card-accent', accent || 'var(--gv-accent)');
@@ -371,6 +371,7 @@ function fillCard({ kicker, title, subtitle, rows, text, link, accent, image, sa
   setText(text);
   setImage(image);
   $('card-brief').innerHTML = '';
+  peopleExtras({ links, stats }); // People & records: extra links and big numbers
   const a = $('card-link');
   if (link && /^https?:\/\//.test(link.href)) { a.hidden = false; a.href = link.href; a.textContent = link.text || 'Source'; } else a.hidden = true;
   $('card-fly').hidden = false;
@@ -422,6 +423,7 @@ function openItem(layerId, key, d) {
       if (current) current.extraRows = Array.isArray(x) ? x : (x?.rows || []);
       if (Array.isArray(x)) addRows(x);
       else if (x) { if (x.say) setSay(x.say); if (x.rows) addRows(x.rows); if (x.text) setText(x.text); if (x.credit) setCredit(x.credit, x.extraLink); if (x.image) setImage(x.image); }
+      if (x && (x.links || x.stats)) peopleExtras(x, true); // People & records
     }).catch((e) => { if (current === mine) { setRows(d.rows); addRows([['Details', `Not available (${e.message})`]]); } });
   }
 }
@@ -482,6 +484,7 @@ async function openPoint(lat, lon) {
     if (current !== mine) return;
     setRows([['Weather', `Unavailable (${e.message})`]]);
   }
+  peoplePointInfo(lat, lon, mine); // People & records: "Who's in charge here" for the tapped spot
 }
 
 // ---------------------------------------------------------------- "What's here" briefing
@@ -722,7 +725,7 @@ function openSettings() {
       openSettings();
     }));
     if (apiKeys.get(name)) wrap.appendChild(button('Remove', () => { apiKeys.set(name, ''); openSettings(); }, 'danger'));
-    const users = LAYERS.filter((l) => l.needsKey === name).map((l) => l.name).join(', ');
+    const users = LAYERS.filter((l) => l.needsKey === name || (l.usesKeys || []).includes(name)).map((l) => l.name).join(', ');
     field(`${escapeHtml(k.name)}<small>Used by: ${escapeHtml(users)} · <a href="${k.url}" target="_blank" rel="noopener">get a key</a></small>`, wrap, true);
   }
   const others = Object.keys(apiKeys.all()).filter((n) => !KEYS[n]);
@@ -808,4 +811,41 @@ function openSettings() {
   body.appendChild(ver);
 
   $('settings').hidden = false;
+}
+
+// ---------------------------------------------------------------- People & records
+// Cards from the people-* layers can carry `links` (several official links) and
+// `stats` (a few big numbers). Layers with pointInfo(ctx, lat, lon) add rows to
+// the card for a tapped bare spot while they are switched on.
+function peopleExtras({ links, stats } = {}, append = false) {
+  let box = $('card-extra');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'card-extra';
+    box.className = 'card-extra';
+    $('card-text').before(box);
+  }
+  if (!append) box.innerHTML = '';
+  if (stats && stats.length) {
+    box.insertAdjacentHTML('beforeend', `<div class="gv-stats">${stats.map((s) => `<div><b>${escapeHtml(s.value)}</b><span>${escapeHtml(s.label)}</span></div>`).join('')}</div>`);
+  }
+  const ok = (links || []).filter((l) => l && /^(https:\/\/|mailto:)/.test(l.href || ''));
+  if (ok.length) {
+    box.insertAdjacentHTML('beforeend', `<div class="gv-links">${ok.map((l) => `<a href="${escapeHtml(l.href)}" target="_blank" rel="noopener">${escapeHtml(l.text || 'Link')}</a>`).join('')}</div>`);
+  }
+  box.hidden = !box.innerHTML;
+}
+
+async function peoplePointInfo(lat, lon, mine) {
+  for (const L of LAYERS) {
+    if (!L.pointInfo || !M.state[L.id].enabled || !M.ctx[L.id]) continue;
+    try {
+      const x = await L.pointInfo(M.ctx[L.id], lat, lon);
+      if (current !== mine || !x) return;
+      addRows([[x.title || L.name, ''], ...(x.rows || [])]);
+      peopleExtras({ links: x.links }, true);
+    } catch (e) {
+      if (current === mine) addRows([[L.name, `Not available (${e.message})`]]);
+    }
+  }
 }

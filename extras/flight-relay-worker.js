@@ -24,6 +24,10 @@ const ALLOWED_HOSTS = [
   'services3.arcgis.com',         // NIFC wildfires (fallback only)
   'firms.modaps.eosdis.nasa.gov', // NASA FIRMS (fallback only)
   'overpass-api.de',              // OpenStreetMap Overpass (fallback only)
+  // People & records
+  'www.missingkids.org',          // NCMEC missing-children posters
+  'tigerweb.geo.census.gov', 'api.census.gov', 'data.openstates.org', 'v3.openstates.org', 'api.open.fec.gov',
+  'echodata.epa.gov', 'data.cms.gov', 'api.fdic.gov', 'www.fema.gov', // fallbacks only
 ];
 const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 

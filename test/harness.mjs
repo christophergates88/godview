@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import * as F from './fixtures.mjs';
+import { answerPeople } from './fixtures-people.mjs'; // People & records sample data
 import * as W from '../server/watch/worker.js';
 import { KV as WatchKV, makeFetch as watchFetch } from '../server/watch/test/mocks.mjs';
 
@@ -43,11 +44,12 @@ export const check = (name, ok, extra = '') => { results.push({ name, ok, extra 
 
 // What each data host answers in the tests (sample data, see fixtures.mjs).
 export const WATCH_HOST = 'godview-watch.testsub.workers.dev';
-const RELAY_ONLY = new Set(['api.adsb.lol', 'opensky-network.org', 'api.airplanes.live', 'opendata.adsb.fi', 'nasstatus.faa.gov', 'www.ndbc.noaa.gov', 'www.nhc.noaa.gov', 'droughtmonitor.unl.edu', 'www.submarinecablemap.com', '511ga.org']);
+const RELAY_ONLY = new Set(['api.adsb.lol', 'opensky-network.org', 'api.airplanes.live', 'opendata.adsb.fi', 'nasstatus.faa.gov', 'www.ndbc.noaa.gov', 'www.nhc.noaa.gov', 'droughtmonitor.unl.edu', 'www.submarinecablemap.com', '511ga.org', 'www.missingkids.org', 'api.census.gov']);
 export function answer(u, mode) {
   const host = u.hostname; const p = u.pathname;
   const J = (obj, status = 200) => ({ status, type: 'application/json', body: JSON.stringify(obj) });
   const T = (text, type = 'text/plain') => ({ status: 200, type, body: text });
+  const people = answerPeople(u); if (people) return people; // People & records hosts
   switch (host) {
     case 'earthquake.usgs.gov': return mode.quakesFail ? J({ error: 'x' }, 500) : J(F.usgs());
     case 'celestrak.org': return J(F.celestrak());

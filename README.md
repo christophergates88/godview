@@ -222,3 +222,50 @@ feed works; `GodView.selfTest()` on the real site does that. Screenshots go to `
 
 Credits: CesiumJS (Apache 2.0), satellite.js (MIT), and the data providers above.
 Public feeds can be late, incomplete or wrong — not for navigation or safety decisions.
+
+## People & records (group 8, 9 layers, all off by default)
+
+"Records of people you never thought about", with a hard privacy line.
+
+**The privacy line (not negotiable).** GodView shows people only in their
+**public role** (elected officials, public figures with a Wikipedia article),
+**official public appeals** (NCMEC missing-child posters, shown exactly as
+published), **organizations**, and people **in aggregate** (Census numbers).
+It never looks up or shows private individuals: no who-lives-at-an-address,
+no property owners, no voter rolls, no court, arrest or inmate records, no
+individual political donors, no home addresses of private persons, no
+sex-offender maps, no people-search of any kind. Where a public registry mixes
+organizations and private persons, every name passes through
+`js/layers/lib/privacy.js` first: a name that looks like a person or a home is
+replaced by "Privately registered" / "Private site", with no name and no street
+address. When in doubt, the name is withheld. State legislators' district-office
+addresses are never shown (they can be home addresses).
+
+| Layer | Source | Via | Notes |
+|---|---|---|---|
+| Who's in charge here | Census TIGERweb (districts), @unitedstates congress-legislators, Open States CSV, Wikidata, OpenFEC | Direct (relay fallback) | Senators, representative, governor, state legislators, school district; official links; campaign committee totals load when the card opens (FEC DEMO_KEY: ~30 calls/hour). Also adds its rows when you tap bare ground while it is on. No local officials (no open nationwide source). |
+| The people here (Census) | Census ACS 5-year (2020–2024) via Census Reporter; backup: Census Data API | Direct (backup: key `census` + relay) | Tract and county: a few big numbers, never individuals. The Census API itself needs a free key and has no CORS, so it is only a backup |
+| Notable people born here | Wikidata + Wikipedia | Direct | Only people with an English Wikipedia article, at their birthplace |
+| Federal money here | USAspending.gov | Direct (POST; no relay possible) | Top contract and grant recipients in the county, last 12 months; persons counted, never named |
+| EPA-regulated sites | EPA ECHO | Direct (relay fallback) | Up to 10 miles round the view centre (smaller where sites are dense); inspections, violations, penalties; red = violation now |
+| Hospitals & nursing homes | OpenStreetMap via Overpass | Direct (relay fallback) | Locations only, with a link to Medicare Care Compare for official star ratings (CMS's own data service blocks web pages and the relay) |
+| Bank branches (FDIC) | FDIC BankFind | Direct (relay fallback) | One state per request; nearest branches kept |
+| Disaster declarations (FEMA) | OpenFEMA | Direct (relay fallback) | County and statewide declarations |
+| Missing children (NCMEC) | NCMEC state RSS | Relay | Official posters only, unchanged; placed at the town they name. Not AMBER Alerts. |
+
+Optional keys (Settings > API keys): Open States (state legislators straight from
+its API), an api.data.gov key for the FEC (higher limit than DEMO_KEY) and a
+Census API key (backup for the Census numbers; free at api.census.gov/data/key_signup.html).
+Relay hosts used by this group (add to `ALLOWED_HOSTS` in the worker):
+`www.missingkids.org` (needed), and as fallbacks `tigerweb.geo.census.gov`,
+`data.openstates.org`, `v3.openstates.org`, `api.open.fec.gov`, `api.censusreporter.org`,
+`echodata.epa.gov`, `api.fdic.gov`, `www.fema.gov`; `api.census.gov` always goes through the relay.
+
+`GodView.selfTest()` checks each layer's main fetch. To check every source this
+group uses (each one once), run `await GodViewPeople.check()` in the console.
+
+Not built, and why: OSHA inspections (the Labor Department API needs a key and
+its OSHA dataset could not be verified), FCC licences and FAA aircraft owners (no
+keyless source that gives the registrant type was verified; the filter for them,
+FAA type codes included, is ready in `privacy.js`), nonprofits (ProPublica's API
+cannot search by place), city 311/permit portals (no common source).

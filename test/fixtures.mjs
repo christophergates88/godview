@@ -135,7 +135,7 @@ export const spcCsv = () => `Time,F_Scale,Location,County,State,Lat,Lon,Comments
 Time,Speed,Location,County,State,Lat,Lon,Comments
 1910,UNK,Sampletown,Sample,GA,33.33,-83.39,"Trees down, one on a house. (FFC)"
 Time,Size,Location,County,State,Lat,Lon,Comments
-1920,100,Milledgeville,Baldwin,GA,33.08,-83.23,Quarter size hail. (FFC)
+1920,100,Macon,Bibb,GA,32.84,-83.63,Quarter size hail. (FFC)
 `;
 export const spcOutlook = () => ({ type: 'FeatureCollection', features: [
   { type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: [[[[-86, 31], [-81, 31], [-81, 35], [-86, 35], [-86, 31]]]] }, properties: { DN: 2, VALID: '202611121200', EXPIRE: '202611131200', ISSUE: '202611121630', LABEL: 'TSTM', LABEL2: 'General Thunderstorms Risk', stroke: '#55BB55', fill: '#C1E9C1' } },
@@ -156,7 +156,7 @@ export const firmsCsv = () => `latitude,longitude,bright_ti4,scan,track,acq_date
 `;
 export const volcanoes = () => ([{ obs_fullname: 'Alaska Volcano Observatory', obs_abbr: 'avo', volcano_name: 'Great Sitkin', vnum: '311120', alert_level: 'WATCH', color_code: 'ORANGE', sent_utc: '2026-11-12 18:00:00', notice_url: 'https://volcanoes.usgs.gov/hans2/view/notice/sample', latitude: 52.076, longitude: -176.13 }]);
 export const gauges = () => ({ gauges: [
-  { lid: 'OCOG1', name: 'Oconee River at Milledgeville', latitude: 33.09, longitude: -83.21, status: { observed: { primary: 12.3, primaryUnit: 'ft', floodCategory: 'no_flooding', validTime: iso(now - 3600e3) }, forecast: { floodCategory: 'no_flooding' } } },
+  { lid: 'OCOG1', name: 'Ocmulgee River at Macon', latitude: 33.09, longitude: -83.21, status: { observed: { primary: 12.3, primaryUnit: 'ft', floodCategory: 'no_flooding', validTime: iso(now - 3600e3) }, forecast: { floodCategory: 'no_flooding' } } },
   { lid: 'ALBG1', name: 'Flint River at Albany', latitude: 31.59, longitude: -84.14, status: { observed: { primary: 22.0, primaryUnit: 'ft', floodCategory: 'minor', validTime: iso(now - 3600e3) }, forecast: { floodCategory: 'action' } } },
 ] });
 export const drought = () => ({ type: 'FeatureCollection', features: [
