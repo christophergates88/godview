@@ -69,8 +69,8 @@ const series = (name, code, lat, lon, vc, value) => ({
   values: [{ value: [{ value: String(value), qualifiers: ['P'], dateTime: new Date(now - 900000).toISOString() }] }],
 });
 export const usgsWater = () => ({ value: { timeSeries: [
-  series('LITTLE RIVER NEAR EATONTON, GA', '02220900', 33.3141, -83.4371, '00060', 12.0),
-  series('LITTLE RIVER NEAR EATONTON, GA', '02220900', 33.3141, -83.4371, '00065', 1.84),
+  series('OCMULGEE RIVER AT MACON, GA', '02213000', 32.8384, -83.6213, '00060', 12.0),
+  series('OCMULGEE RIVER AT MACON, GA', '02213000', 32.8384, -83.6213, '00065', 1.84),
   series('SAMPLE LAKE NEAR TESTVILLE, GA', '02220999', 33.2, -83.3, '62614', 339.52),
   series('BROKEN GAUGE AT NOWHERE, GA', '02229999', 33.1, -83.2, '00065', -999999),   // no reading: left out
 ] } });

@@ -30,9 +30,9 @@ const layer = makePointLayer({
   parse: (d) => (d.cams || []).map((c) => ({
     key: c.id, lat: c.lat, lon: c.lon,
     title: c.name,
-    say: `Live traffic camera on ${c.road || 'the road'}${c.dir ? `, facing ${c.dir.toLowerCase()}` : ''}.`,
+    say: `Live traffic camera on ${c.road || 'the road'}${c.dir && /bound$/.test(c.dir) ? `, ${c.dir}` : ''}.`,
     subtitle: [c.road, c.dir].filter(Boolean).join(' · '),
-    rows: [['Source', 'Georgia DOT (511GA)'], ['Status', c.ok ? 'Working' : 'Offline']],
+    rows: [['Source', 'Georgia DOT (511GA)'], ['Camera', c.code || c.id], ['Status', c.ok ? 'Working' : 'Offline']],
     image: c.url || null,
     link: c.url ? { href: c.url, text: 'Open camera' } : { href: 'https://511ga.org/', text: '511GA' },
   })),

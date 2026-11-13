@@ -54,10 +54,26 @@ const ts = (v) => {
 };
 const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
 
+// 511GA direction codes in plain words ("ew" = both ways on an east-west road).
+const DIRS = { n: 'northbound', s: 'southbound', e: 'eastbound', w: 'westbound', ns: 'both ways', sn: 'both ways', ew: 'both ways', we: 'both ways', b: 'both ways', both: 'both ways', 'both directions': 'both ways', all: 'all directions', 'all directions': 'all directions', none: '', unknown: '' };
+export function dirWords(d) {
+  const k = String(d || '').trim().toLowerCase();
+  if (k in DIRS) return DIRS[k];
+  return /bound$/.test(k) ? k : String(d || '').trim();
+}
+// Many camera names are ids ("GDOT-CCTV-1058") or "id: place"; show the place.
+export function camTitle(name, road, dir) {
+  const n = String(name || '').trim();
+  const m = n.match(/^[A-Z0-9-]{4,}:\s*(.+)$/);
+  if (m) return m[1];
+  if (!n || /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(n)) return [road || 'Traffic camera', dirWords(dir)].filter(Boolean).join(' ');
+  return n;
+}
+
 // ---- cameras
 export function camsFromFeed(feed) {
   return (feed.cameras || []).map((c) => ({
-    id: String(c.id), name: c.name || 'Traffic camera', road: c.road || '', dir: c.dir && c.dir !== 'Unknown' && c.dir !== 'None' ? c.dir : '',
+    id: String(c.id), name: camTitle(c.name, c.road, c.dir), code: c.name || '', road: c.road || '', dir: dirWords(c.dir),
     lat: num(c.lat), lon: num(c.lon), url: c.url || null, ok: c.ok !== false,
   })).filter((c) => c.lat && c.lon);
 }
@@ -65,27 +81,28 @@ export function camsFromApi(list) {
   return (Array.isArray(list) ? list : []).map((c) => {
     const view = (c.Views || []).find((v) => v.Status !== 'Disabled') || (c.Views || [])[0] || {};
     return {
-      id: String(c.Id), name: c.Location || c.Name || 'Traffic camera', road: c.Roadway || '', dir: c.Direction && c.Direction !== 'None' && c.Direction !== 'Unknown' ? c.Direction : '',
+      id: String(c.Id), name: c.Location || camTitle(c.Name, c.Roadway, c.Direction), code: c.Name || '', road: c.Roadway || '', dir: dirWords(c.Direction),
       lat: num(c.Latitude), lon: num(c.Longitude), url: view.Url || null, ok: !/disabled/i.test(view.Status || ''),
     };
   }).filter((c) => c.lat && c.lon);
 }
 
 // ---- road events
-const DIR = { n: 'Northbound', s: 'Southbound', e: 'Eastbound', w: 'Westbound', b: 'Both directions' };
 export function eventsFromFeed(feed) {
+  const seen = {};
+  const unique = (id) => { seen[id] = (seen[id] || 0) + 1; return seen[id] > 1 ? `${id}#${seen[id]}` : id; };
   return (feed.events || []).map((e) => {
     const lat = num(e.lat); const lon = num(e.lon);
     return {
-      id: `${e.type || 'ev'}:${lat.toFixed(4)},${lon.toFixed(4)}:${hash(String(e.desc || ''))}`,
+      id: unique(`${e.type || 'ev'}:${lat.toFixed(4)},${lon.toFixed(4)}:${hash(String(e.desc || ''))}`),
       type: e.type || '', sub: e.sub || '', sev: e.sev || '', desc: e.desc || '', road: e.road || '',
-      dir: DIR[String(e.dir || '').toLowerCase()] || e.dir || '', lanes: '', lat, lon, reported: null, updated: ts(e.updated),
+      dir: dirWords(e.dir), lanes: '', lat, lon, reported: null, updated: ts(e.updated),
     };
   }).filter((e) => e.lat && e.lon);
 }
 export function eventsFromApi(list) {
   return (Array.isArray(list) ? list : []).map((e) => ({
     id: String(e.ID ?? e.Id), type: e.EventType || '', sub: e.Subtype || '', sev: e.Severity || '', desc: e.Description || '', road: e.RoadwayName || '',
-    dir: e.DirectionOfTravel || '', lanes: e.LanesAffected || '', lat: num(e.Latitude), lon: num(e.Longitude), reported: ts(e.Reported), updated: ts(e.LastUpdated),
+    dir: dirWords(e.DirectionOfTravel), lanes: e.LanesAffected || '', lat: num(e.Latitude), lon: num(e.Longitude), reported: ts(e.Reported), updated: ts(e.LastUpdated),
   })).filter((e) => e.lat && e.lon);
 }
