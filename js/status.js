@@ -9,6 +9,7 @@ import { settings } from './core/settings.js';
 import { fmt, escapeHtml } from './core/units.js';
 import { distKm, inRing } from './layers/lib/geo.js';
 import * as watch from './watch.js';
+import { inferFromManager } from './infer.js';
 
 const $ = (id) => document.getElementById(id);
 const WMO = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'cloudy', 45: 'fog', 48: 'fog', 51: 'drizzle', 53: 'drizzle', 55: 'drizzle', 61: 'light rain', 63: 'rain', 65: 'heavy rain', 71: 'light snow', 73: 'snow', 75: 'heavy snow', 80: 'showers', 81: 'showers', 82: 'heavy showers', 95: 'thunderstorms', 96: 'storms with hail', 99: 'storms with hail' };
@@ -76,6 +77,11 @@ export async function computeStatus(pt) {
     if (hits.length) { level = Math.max(level, /Warning/i.test(hits[0].title) ? 2 : 1); headline = `${/Warning/i.test(hits[0].title) ? 'Act now' : 'Heads-up'}: ${hits[0].title}`; }
   }
   if (!headline) headline = pt.label === 'Here' ? 'All clear here' : `All clear near ${pt.label}`;
+  // An inference nearby (medium or high confidence), clearly marked
+  try {
+    const inf = inferFromManager(M, pt, 30).filter((x) => x.confidence !== 'low');
+    if (inf.length) facts.push(`Possibly: ${inf[0].title} ${inf[0].where}`);
+  } catch { /* skip */ }
   // Weather now
   try {
     const k = `wx.${pt.lat.toFixed(2)},${pt.lon.toFixed(2)}`;

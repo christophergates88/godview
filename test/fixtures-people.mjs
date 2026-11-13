@@ -1,7 +1,7 @@
 // Sample responses for the "People & records" layers. Hand-made to match each
 // provider's documented format (field names and structure). NOT real data:
 // every person and organization name below is invented, apart from field names.
-// Map positions are small offsets from the shared selfTest view (33.3, -83.4);
+// Map positions are small offsets from the shared selfTest view (32.84, -83.63);
 // move them with it if that view changes.
 
 const now = Date.now();
@@ -10,10 +10,10 @@ const iso = (ms) => new Date(ms).toISOString();
 // Census TIGERweb tigerWMS_Current identify (layerName + attributes).
 export const tigerIdentify = () => ({
   results: [
-    { layerId: 80, layerName: 'States', attributes: { GEOID: '13', NAME: 'Georgia', BASENAME: 'Georgia', STATE: '13', INTPTLAT: '+32.6295789', INTPTLON: '-083.4235109' } },
-    { layerId: 82, layerName: 'Counties', attributes: { GEOID: '13021', NAME: 'Bibb County', BASENAME: 'Bibb', STATE: '13', COUNTY: '021', INTPTLAT: '+32.8065', INTPTLON: '-083.6974' } },
-    { layerId: 8, layerName: 'Census Tracts', attributes: { GEOID: '13021012500', NAME: 'Census Tract 125', BASENAME: '125', STATE: '13', COUNTY: '021', TRACT: '012500', INTPTLAT: '+33.3001', INTPTLON: '-083.4102' } },
-    { layerId: 28, layerName: 'Incorporated Places', attributes: { GEOID: '1349008', NAME: 'Macon-Bibb County', BASENAME: 'Macon-Bibb County', STATE: '13', INTPTLAT: '+32.8407', INTPTLON: '-083.6324' } },
+    { layerId: 80, layerName: 'States', attributes: { GEOID: '13', NAME: 'Georgia', BASENAME: 'Georgia', STATE: '13', INTPTLAT: '+32.6295789', INTPTLON: '-083.6535109' } },
+    { layerId: 82, layerName: 'Counties', attributes: { GEOID: '13021', NAME: 'Bibb County', BASENAME: 'Bibb', STATE: '13', COUNTY: '021', INTPTLAT: '+32.8065', INTPTLON: '-083.9274' } },
+    { layerId: 8, layerName: 'Census Tracts', attributes: { GEOID: '13021012500', NAME: 'Census Tract 125', BASENAME: '125', STATE: '13', COUNTY: '021', TRACT: '012500', INTPTLAT: '+32.8401', INTPTLON: '-083.6402' } },
+    { layerId: 28, layerName: 'Incorporated Places', attributes: { GEOID: '1349008', NAME: 'Macon-Bibb County', BASENAME: 'Macon-Bibb County', STATE: '13', INTPTLAT: '+32.8407', INTPTLON: '-083.8624' } },
     { layerId: 14, layerName: 'Unified School Districts', attributes: { GEOID: '1300390', NAME: 'Bibb County School District', STATE: '13' } },
     { layerId: 54, layerName: '120th Congressional Districts', attributes: { GEOID: '1310', NAME: 'Congressional District 10', BASENAME: '10', CD120: '10', STATE: '13' } },
     { layerId: 56, layerName: '2026 State Legislative Districts - Upper', attributes: { GEOID: '13025', NAME: 'State Senate District 25', BASENAME: '25', SLDU: '025', STATE: '13' } },
@@ -51,10 +51,10 @@ export const wikidataGov = () => ({ head: { vars: ['kind', 'item', 'itemLabel', 
   B({ kind: 'county', item: 'http://www.wikidata.org/entity/Q900002', itemLabel: 'Bibb County', site: 'http://www.maconbibb.us/' }),
 ] } });
 export const wikidataNotable = () => ({ head: { vars: [] }, results: { bindings: [
-  B({ p: 'http://www.wikidata.org/entity/Q900011', pLabel: 'Jules Samplewriter', pDescription: 'American writer (sample)', placeLabel: 'Sampletown', born: '1902-03-04T00:00:00Z', died: '1990-05-06T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Jules_Samplewriter', lat: '33.2950', lon: '-83.4210', img: 'http://commons.wikimedia.org/wiki/Special:FilePath/Sample.jpg' }),
-  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'American athlete (sample)', placeLabel: 'Sampletown', born: '1985-01-01T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '33.2950', lon: '-83.4210' }),
-  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'duplicate row', placeLabel: 'Sampletown', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '33.2950', lon: '-83.4210' }),
-  B({ p: 'http://www.wikidata.org/entity/Q900013', pLabel: 'Lee Samplemusician', pDescription: 'American musician (sample)', placeLabel: 'Otherville', born: '1950-07-07T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Lee_Samplemusician', lat: '33.0801', lon: '-83.2321' }),
+  B({ p: 'http://www.wikidata.org/entity/Q900011', pLabel: 'Jules Samplewriter', pDescription: 'American writer (sample)', placeLabel: 'Sampletown', born: '1902-03-04T00:00:00Z', died: '1990-05-06T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Jules_Samplewriter', lat: '32.8350', lon: '-83.6510', img: 'http://commons.wikimedia.org/wiki/Special:FilePath/Sample.jpg' }),
+  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'American athlete (sample)', placeLabel: 'Sampletown', born: '1985-01-01T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '32.8350', lon: '-83.6510' }),
+  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'duplicate row', placeLabel: 'Sampletown', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '32.8350', lon: '-83.6510' }),
+  B({ p: 'http://www.wikidata.org/entity/Q900013', pLabel: 'Lee Samplemusician', pDescription: 'American musician (sample)', placeLabel: 'Otherville', born: '1950-07-07T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Lee_Samplemusician', lat: '32.6201', lon: '-83.4621' }),
 ] } });
 
 // Census API (ACS 5-year): header row + one value row. Numbers chosen to check the maths.
@@ -91,23 +91,23 @@ export const usaspending = () => ({ category: 'recipient', limit: 15, page_metad
 
 // EPA ECHO get_facility_info (Results.Facilities).
 export const echo = () => ({ Results: { Message: 'Success', QueryRows: '3', Facilities: [
-  { RegistryID: '110000000001', FacName: 'SAMPLE TEXTILE MILL INC', FacStreet: '1 INDUSTRIAL BLVD', FacCity: 'SAMPLEVILLE', FacState: 'GA', FacLat: '33.33', FacLong: '-83.39', AIRFlag: 'Y', NPDESFlag: 'Y', RCRAFlag: 'N', CurrVioFlag: 'Y', FacSNCFlg: 'N', FacComplianceStatus: 'Violation Identified', FacInspectionCount: '4', FacDateLastInspection: '03/15/2026', FacQtrsWithNC: '3', FacFormalActionCount: '1', FacTotalPenalties: '12500' },
-  { RegistryID: '110000000002', FacName: 'SAMPLEVILLE WWTP', FacStreet: '2 RIVER RD', FacCity: 'SAMPLEVILLE', FacState: 'GA', FacLat: '33.31', FacLong: '-83.40', NPDESFlag: 'Y', CurrVioFlag: 'N', FacSNCFlg: 'N', FacComplianceStatus: 'No Violation Identified', FacInspectionCount: '2', FacQtrsWithNC: '0', FacFormalActionCount: '0', FacTotalPenalties: '0' },
-  { RegistryID: '110000000003', FacName: 'JOHN SMITH RESIDENCE', FacStreet: '9 ELM ST', FacCity: 'SAMPLEVILLE', FacState: 'GA', FacLat: '33.32', FacLong: '-83.38', RCRAFlag: 'Y', CurrVioFlag: 'N', FacSNCFlg: 'N', FacComplianceStatus: 'No Violation Identified', FacQtrsWithNC: '0' },
+  { RegistryID: '110000000001', FacName: 'SAMPLE TEXTILE MILL INC', FacStreet: '1 INDUSTRIAL BLVD', FacCity: 'SAMPLEVILLE', FacState: 'GA', FacLat: '32.87', FacLong: '-83.62', AIRFlag: 'Y', NPDESFlag: 'Y', RCRAFlag: 'N', CurrVioFlag: 'Y', FacSNCFlg: 'N', FacComplianceStatus: 'Violation Identified', FacInspectionCount: '4', FacDateLastInspection: '03/15/2026', FacQtrsWithNC: '3', FacFormalActionCount: '1', FacTotalPenalties: '12500' },
+  { RegistryID: '110000000002', FacName: 'SAMPLEVILLE WWTP', FacStreet: '2 RIVER RD', FacCity: 'SAMPLEVILLE', FacState: 'GA', FacLat: '32.85', FacLong: '-83.63', NPDESFlag: 'Y', CurrVioFlag: 'N', FacSNCFlg: 'N', FacComplianceStatus: 'No Violation Identified', FacInspectionCount: '2', FacQtrsWithNC: '0', FacFormalActionCount: '0', FacTotalPenalties: '0' },
+  { RegistryID: '110000000003', FacName: 'JOHN SMITH RESIDENCE', FacStreet: '9 ELM ST', FacCity: 'SAMPLEVILLE', FacState: 'GA', FacLat: '32.86', FacLong: '-83.61', RCRAFlag: 'Y', CurrVioFlag: 'N', FacSNCFlg: 'N', FacComplianceStatus: 'No Violation Identified', FacQtrsWithNC: '0' },
 ] } });
 
 // OpenStreetMap Overpass answer for hospitals and nursing homes (invented places).
 export const osmCare = () => ({ elements: [
-  { type: 'node', id: 9001, lat: 33.31, lon: -83.39, tags: { amenity: 'hospital', name: 'Sample County Hospital', operator: 'Sample Hospital Authority', emergency: 'yes', 'addr:street': 'Hospital Dr', 'addr:city': 'Sampleville', website: 'https://hospital.example.org' } },
-  { type: 'way', id: 9002, center: { lat: 33.29, lon: -83.41 }, tags: { amenity: 'nursing_home', name: 'Sample Oaks Health and Rehabilitation', beds: '100' } },
-  { type: 'node', id: 9003, lat: 33.30, lon: -83.42, tags: { amenity: 'social_facility', social_facility: 'nursing_home', name: 'Mary Smith', 'addr:street': 'Elm St', 'addr:housenumber': '9' } },
-  { type: 'node', id: 9003, lat: 33.30, lon: -83.42, tags: { amenity: 'social_facility', social_facility: 'nursing_home', name: 'Mary Smith' } },
+  { type: 'node', id: 9001, lat: 32.85, lon: -83.62, tags: { amenity: 'hospital', name: 'Sample County Hospital', operator: 'Sample Hospital Authority', emergency: 'yes', 'addr:street': 'Hospital Dr', 'addr:city': 'Sampleville', website: 'https://hospital.example.org' } },
+  { type: 'way', id: 9002, center: { lat: 32.83, lon: -83.64 }, tags: { amenity: 'nursing_home', name: 'Sample Oaks Health and Rehabilitation', beds: '100' } },
+  { type: 'node', id: 9003, lat: 32.84, lon: -83.65, tags: { amenity: 'social_facility', social_facility: 'nursing_home', name: 'Mary Smith', 'addr:street': 'Elm St', 'addr:housenumber': '9' } },
+  { type: 'node', id: 9003, lat: 32.84, lon: -83.65, tags: { amenity: 'social_facility', social_facility: 'nursing_home', name: 'Mary Smith' } },
 ] });
 
 // FDIC BankFind /locations.
 export const fdic = () => ({ meta: { total: 2 }, data: [
-  { data: { NAME: 'Sample State Bank', OFFNAME: 'Sample State Bank', ADDRESS: '100 Main St', CITY: 'Macon', STALP: 'GA', LATITUDE: 33.290, LONGITUDE: -83.410, SERVTYPE: 11, ESTYMD: '1921-05-02', CERT: 99901, MAINOFF: 1, UNINUMBR: 5550001 }, score: 1 },
-  { data: { NAME: 'Example National Bank', OFFNAME: 'Downtown Branch', ADDRESS: '200 Oak St', CITY: 'Macon', STALP: 'GA', LATITUDE: 33.310, LONGITUDE: -83.430, SERVTYPE: 11, ESTYMD: '2001-01-01', CERT: 99902, MAINOFF: 0, UNINUMBR: 5550002 }, score: 1 },
+  { data: { NAME: 'Sample State Bank', OFFNAME: 'Sample State Bank', ADDRESS: '100 Main St', CITY: 'Macon', STALP: 'GA', LATITUDE: 32.830, LONGITUDE: -83.640, SERVTYPE: 11, ESTYMD: '1921-05-02', CERT: 99901, MAINOFF: 1, UNINUMBR: 5550001 }, score: 1 },
+  { data: { NAME: 'Example National Bank', OFFNAME: 'Downtown Branch', ADDRESS: '200 Oak St', CITY: 'Macon', STALP: 'GA', LATITUDE: 32.850, LONGITUDE: -83.660, SERVTYPE: 11, ESTYMD: '2001-01-01', CERT: 99902, MAINOFF: 0, UNINUMBR: 5550002 }, score: 1 },
 ] });
 
 // NCMEC state RSS (structure as published; invented case).

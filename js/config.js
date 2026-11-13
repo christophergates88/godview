@@ -125,6 +125,9 @@ export const RELAY_HOSTS = {
   'services3.arcgis.com': 'fallback',
   'firms.modaps.eosdis.nasa.gov': 'fallback',
   'overpass-api.de': 'fallback',
+  'maps.nccs.nasa.gov': 'fallback',
+  'gis.fema.gov': 'fallback',
+  'mapservices.weather.noaa.gov': 'fallback',
 };
 
 // Optional free keys. A layer that needs one stays off with a note until the
@@ -189,7 +192,7 @@ export const INTERVALS = {
   amtrak: { def: 120, min: 60 },
   bikeshare: { def: 300, min: 120 },
   powerPlants: { def: 0, min: 0 },        // OpenStreetMap: reloads when you move the view
-  nuclear: { def: 0, min: 0 },
+  nuclear: { def: 21600, min: 3600 },  // NRC status updates daily
   alpr: { def: 0, min: 0 },
   cellTowers: { def: 0, min: 0 },
   cables: { def: 0, min: 0 },
@@ -309,3 +312,23 @@ Object.assign(INTERVALS, {
   peopleMissing: { def: 3600, min: 1800 },
   peopleFema: { def: 3600, min: 1800 },
 });
+
+// Infrastructure sources (v5), replacing OpenStreetMap Overpass, which stopped
+// answering. HIFLD Open (the U.S. homeland-infrastructure open data) ended in
+// 2025; NASA's NCCS keeps a public mirror of its last release, so these are a
+// 2025 snapshot, not live. Overpass stays as the last fallback.
+export const INFRA = {
+  powerPlants: 'https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/energy/FeatureServer/1/query',
+  cellTowers: 'https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/communications/FeatureServer/3/query',
+  hospitals: 'https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query',
+  nursingHomes: 'https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/1/query',
+  reactors: 'https://gis.fema.gov/arcgis/rest/services/Partner/Nuclear_Plant_Power_Reactor_Status/FeatureServer/0/query',
+};
+
+// Conditions reports and inferences (v5). All keyless and readable by a web page.
+export const REPORT_SOURCES = {
+  warningsAtPoint: 'https://mesonet.agron.iastate.edu/json/sbw_by_point.py',
+  stormReports: 'https://mesonet.agron.iastate.edu/geojson/lsr.geojson',
+  quakes: 'https://earthquake.usgs.gov/fdsnws/event/1/query',
+  rainfall: 'https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify',
+};

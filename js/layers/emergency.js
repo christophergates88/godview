@@ -29,6 +29,7 @@ export default makePointLayer({
   },
   parse: (list, ctx) => list.map((f) => ({
     key: f.key, lat: f.lat, lon: f.lon, alt: f.onGround ? 30 : Math.max(50, f.altM || 0), rotation: f.track || 0,
+    altM: f.altM, speedMs: f.speedMs, type: f.type, cat: f.cat, onGround: f.onGround,
     title: `${f.callsign || String(f.key).toUpperCase()} · squawk ${f.squawk}`,
     say: flightSentence({ ...f, special: true }, null, ctx),
     _f: { ...f, special: true },

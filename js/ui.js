@@ -8,6 +8,7 @@ import { fetchJSON, fillUrl, cache } from './core/net.js';
 import * as globe from './globe.js';
 import { buildBrief } from './brief.js';
 import * as watch from './watch.js';
+import { inferFromManager } from './infer.js';
 import { MODES, GROUP_COLORS, applyMode } from './modes.js';
 import { initStatus } from './status.js';
 import { initHint } from './hint.js';
@@ -412,6 +413,16 @@ function openItem(layerId, key, d) {
   play.hidden = !d.audio;
   play.dataset.src = d.audio || '';
   setFollowBtn(false);
+  // Public DOT cameras can be added to a watched place (for camera AI).
+  const camBtn = $('card-cam');
+  const camUrl = (layerId === 'ga511Cameras' || layerId === 'caltrans') && d.image;
+  camBtn.hidden = !(camUrl && watch.connected());
+  camBtn.onclick = async () => {
+    const places = watch.placesList();
+    const target = places.length > 1 ? (prompt(`Add this camera to which place?\n${places.map((p, i) => `${i + 1}. ${p.name}`).join('\n')}`, '1') || '') : '1';
+    const p = places[Number(target) - 1] || places[0];
+    try { const name = await watch.addCamera({ id: `${layerId}-${key}`.slice(0, 40), name: d.title || 'Camera', url: d.image }, p?.id); toast(`Camera added to ${name}. Turn on Camera AI in that place to have it checked.`); } catch (e) { toast(e.message); }
+  };
   showCard();
   // Extra details loaded on demand (tide readings, article summary, ...)
   if (M.get(layerId).details) {
@@ -526,8 +537,18 @@ async function openBrief(lat, lon, label) {
     if (!lines.length) lines.push('Nothing to flag here right now.');
     sections.unshift({ title: 'Watch check', lines });
   }
+  {
+    // Inferences from what is loaded on the map (never shown as fact).
+    const inf = inferFromManager(M, { lat, lon }, 40);
+    if (inf.length) sections.splice(server ? 1 : 0, 0, { title: 'Possibly happening (not confirmed)', lines: inf.slice(0, 4).map((x) => `${x.text} (${x.confidence} confidence; ${x.evidence.slice(0, 2).join('; ')})`) });
+  }
   box.innerHTML = sections.map((s) => `<h4>${escapeHtml(s.title)}</h4><ul>${s.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`).join('');
   if (label !== 'My location') box.appendChild(me);
+  const rep = document.createElement('button');
+  rep.className = 'btn';
+  rep.textContent = 'Conditions report for this spot';
+  rep.addEventListener('click', () => { closeCard(); watch.openReportsFor({ lat, lon, name: label === 'View centre' ? `Point ${lat.toFixed(3)}, ${lon.toFixed(3)}` : label }); });
+  box.appendChild(rep);
 }
 
 // ---------------------------------------------------------------- search

@@ -262,10 +262,10 @@ export class LayerManager {
   }
 
   // ---------------------------------------------------------------- self-test
-  // One real fetch per layer for a fixed view (central Georgia, ~300 km),
+  // One real fetch per layer for a fixed view (Macon, Georgia, ~300 km),
   // whether or not the layer is on. Draws nothing and changes no settings.
   // Always resolves within 60 s to [{ id, name, ok, count, ms, via, error }].
-  selfTest({ lat = 33.3, lon = -83.4, radiusKm = 300 } = {}) {
+  selfTest({ lat = 32.84, lon = -83.63, radiusKm = 300 } = {}) {
     const view = { lat, lon, radiusKm, heightKm: radiusKm / 0.9 };
     const results = this.layers.map((l) => ({ id: l.id, name: l.name, ok: false, count: null, ms: null, via: null, error: 'did not finish' }));
     const runOne = async (layer, out) => {

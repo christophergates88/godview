@@ -20,6 +20,7 @@ export default makePointLayer({
   fetch: (ctx) => ctx.net.get(ENDPOINTS.military, { timeoutMs: 15000 }),
   parse: (raw, ctx) => readsb.parse(raw).map((f) => ({
     key: f.key, lat: f.lat, lon: f.lon, alt: f.onGround ? 30 : Math.max(50, f.altM || 0), rotation: f.track || 0,
+    altM: f.altM, speedMs: f.speedMs, type: f.type, cat: f.cat, onGround: f.onGround,
     title: f.callsign || String(f.key).toUpperCase(),
     say: flightSentence({ ...f, military: true, special: true }, null, ctx),
     _f: { ...f, military: true, special: true },

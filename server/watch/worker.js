@@ -46,6 +46,12 @@ export const SRC = {
   forecast: 'https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_gusts_10m_max,weather_code,sunrise,sunset,uv_index_max&current=temperature_2m,weather_code&timezone=auto&forecast_days=1&temperature_unit=fahrenheit&wind_speed_unit=mph',
   ntfy: 'https://ntfy.sh/',
   anthropic: 'https://api.anthropic.com/v1/messages',
+  // Conditions reports (v5)
+  sbwByPoint: 'https://mesonet.agron.iastate.edu/json/sbw_by_point.py',
+  lsr: 'https://mesonet.agron.iastate.edu/geojson/lsr.geojson',
+  fdsn: 'https://earthquake.usgs.gov/fdsnws/event/1/query',
+  mrmsIdentify: 'https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify',
+  nwsAlertsAll: 'https://api.weather.gov/alerts?point={lat},{lon}&start={start}&end={end}',
 };
 
 // Which checks run for each kind of place.
@@ -56,7 +62,7 @@ export const KINDS = {
   waypoint: ['alerts', 'storms', 'fires', 'rivers', 'tropical'],
   client: ['alerts', 'storms', 'fires', 'rivers', 'tropical'],
 };
-export const DEFAULT_SETTINGS = { briefHour: 6, briefMinute: 15, tz: 'America/New_York', quietStart: 22, quietEnd: 6, units: 'imperial' };
+export const DEFAULT_SETTINGS = { briefHour: 6, briefMinute: 15, tz: 'America/New_York', quietStart: 22, quietEnd: 6, units: 'imperial', camCap: 50 };
 export const SEV = { info: 1, heads: 2, act: 3 };
 const SEV_LABEL = { 1: 'info', 2: 'heads-up', 3: 'act now' };
 
@@ -154,7 +160,7 @@ function ev(place, check, sev, key, title, text, todo, pos, data) {
   const w = pos ? where(place, pos.lat, pos.lon) : null;
   return {
     id: `${place.id}|${key}`, key, placeId: place.id, check, sev, title, text: text + (w && !/ mi [NSEW]|right at the place/.test(text) ? ` (${w.text})` : ''),
-    todo: todo || '', distKm: w ? Math.round(w.km * 10) / 10 : null, dir: w?.dir || null, data: data || null, handled: false,
+    todo: todo || '', distKm: w ? Math.round(w.km * 10) / 10 : null, dir: w?.dir || null, data: pos && Number.isFinite(pos.lat) ? { ...(data || {}), pos: { lat: Math.round(pos.lat * 1e4) / 1e4, lon: Math.round(pos.lon * 1e4) / 1e4 } } : (data || null), handled: false,
   };
 }
 
@@ -181,14 +187,19 @@ CHECKS.alerts = async (ctx, place, ps) => {
     const sev = act ? SEV.act : (/Warning/i.test(ev1) || p.severity === 'Severe') ? SEV.heads : SEV.info;
     const updated = p.messageType === 'Update';
     const until = p.ends || p.expires;
+    const prm = p.parameters || {};
+    const hailIn = Number(String((prm.maxHailSize || [])[0] || '').replace(/[^\d.]/g, '')) || 0;
+    const gust = String((prm.maxWindGust || [])[0] || '').trim();
+    if (hailIn || gust) (ps.alertTags ||= {})[id] = { hail: hailIn, gust, event: ev1, t: ctx.now.getTime() };
     const todo = (p.instruction || '').split(/(?<=\.)\s/)[0].slice(0, 180) || (act ? 'Follow local official instructions now.' : '');
     events.push(ev(place, 'alerts', sev, `nws:${id}`, `${updated ? 'Updated: ' : ''}${ev1}`,
-      `${ev1} for ${place.name}${until ? ` until ${localTime(Date.parse(until), ctx.settings.tz)}` : ''}.`, todo, null, { headline: p.headline || '' }));
+      `${ev1} for ${place.name}${until ? ` until ${localTime(Date.parse(until), ctx.settings.tz)}` : ''}${hailIn ? `; warned for ${hailIn.toFixed(2)} in hail` : ''}${gust ? `${hailIn ? ',' : ';'} wind ${gust}` : ''}.`, todo, null, { headline: p.headline || '', hailIn, gust }));
   }
   for (const id of Object.keys(prev)) {
     if (!now[id]) events.push(ev(place, 'alerts', SEV.info, `nwsend:${id}`, `${prev[id]} ended`, `${prev[id]} for ${place.name} has ended or expired.`, ''));
   }
   ps.alerts = now;
+  for (const id of Object.keys(ps.alertTags || {})) if (!now[id] && ctx.now.getTime() - ps.alertTags[id].t > 6 * 3600e3) delete ps.alertTags[id];
   const newCount = events.filter((e) => e.key.startsWith('nws:')).length;
   return { events, metrics: { alerts: newCount }, count: feats.length };
 };
@@ -381,8 +392,102 @@ CHECKS.aircraft = async (ctx, place, ps) => {
     }
   }
   ps.low = low;
-  return { events, metrics: { aircraft: list.length }, count: list.length };
+  events.push(...aircraftInferences(ctx, place, ps, list));
+  const heli = list.filter(isRotorcraft).length;
+  return { events, metrics: { aircraft: list.length, heli }, count: list.length };
 };
+
+// ======================================================================= inferences
+// Things nobody reported, worked out from several signals. Always labelled
+// "Possibly", with a confidence and the evidence, never stated as fact.
+export const TANKERS = new Set(['AT8T', 'AT802', 'AT45', 'AT65', 'CL2T', 'CL41', 'CL4G', 'C130', 'C30J', 'DC10', 'MD87', 'B742', 'P3', 'BAE146', 'B463', 'RJ85', 'S2P', 'S2T']);
+export const isRotorcraft = (a) => a.category === 'A7' || /^(H\d|EC\d|AS\d|B0?[0-9]{2}|R22|R44|R66|S76|S92|A109|A139|A169|AW|BK17|MD5|MD9|EH10|UH|NH90)/i.test(String(a.t || '')) || /helicopter/i.test(String(a.desc || ''));
+export function inference(place, key, title, text, confidence, evidence, pos, sev = SEV.info) {
+  return ev(place, 'infer', sev, `inf:${key}`, `Possibly: ${title}`, `Possibly ${text.replace(/^./, (c) => c.toLowerCase())}`, '', pos, { inference: true, confidence, evidence });
+}
+const hourKey = (ctx) => `${localParts(ctx.now, 'UTC').date}T${localParts(ctx.now, 'UTC').hour}`;
+
+export function aircraftInferences(ctx, place, ps, list) {
+  const out = [];
+  const near = list.filter((a) => a.lat != null && distKm(place.lat, place.lon, a.lat, a.lon) <= Math.max(place.radiusKm, 20));
+  const alt = (a) => (typeof a.alt_baro === 'number' ? a.alt_baro : null);
+  // Helicopters low and slow: maybe landing or hovering (medical, police, news...)
+  for (const a of near.filter((x) => isRotorcraft(x) && alt(x) != null && alt(x) < 1000 && (x.gs ?? 99) < 40)) {
+    out.push(inference(place, `hover:${a.hex}:${hourKey(ctx)}`, 'helicopter landing or hovering',
+      `A helicopter${a.flight ? ` (${a.flight.trim()})` : ''} is low (${alt(a)} ft) and slow (${Math.round(a.gs ?? 0)} kt) near ${place.name}: it may be landing or hovering, for example a medical or police flight.`,
+      'low', [`Rotorcraft ${a.t || a.hex} at ${alt(a)} ft, ${Math.round(a.gs ?? 0)} kt`, 'Position from adsb.lol'], { lat: a.lat, lon: a.lon }));
+  }
+  // Several helicopters / military / emergency aircraft converging on one spot
+  const special = near.filter((a) => isRotorcraft(a) || (Number(a.dbFlags) & 1) === 1 || ['7700', '7600', '7500'].includes(String(a.squawk)));
+  for (const a of special) {
+    const group = special.filter((b) => distKm(a.lat, a.lon, b.lat, b.lon) < 5);
+    if (group.length >= 2 && group[0] === a) {
+      out.push(inference(place, `converge:${Math.round(a.lat * 20)}:${Math.round(a.lon * 20)}:${localParts(ctx.now, ctx.settings.tz).date}`, `${group.length} special aircraft gathered in one spot`,
+        `${group.length} helicopters, military or emergency aircraft are within 5 km of each other: something may be happening there.`,
+        group.length >= 3 ? 'medium' : 'low', group.map((b) => `${(b.flight || b.hex || '').trim()} ${b.t || ''} at ${alt(b) ?? '?'} ft`), { lat: a.lat, lon: a.lon }));
+    }
+  }
+  // Firefighting aircraft low near a known fire
+  const fires = Object.keys(ps.fires || {}).length;
+  for (const a of near.filter((x) => TANKERS.has(String(x.t || '').toUpperCase()) && alt(x) != null && alt(x) < 6000)) {
+    out.push(inference(place, `tanker:${a.hex}:${localParts(ctx.now, 'UTC').date}`, 'firefighting aircraft working nearby',
+      `A ${a.t} (a type used as an air tanker) is flying low near ${place.name}${fires ? ', and a wildfire is listed nearby' : ''}.`,
+      fires ? 'medium' : 'low', [`${a.t} ${(a.flight || a.hex || '').trim()} at ${alt(a)} ft`, fires ? `${fires} wildfire(s) within range (NIFC)` : 'No listed fire in range'], { lat: a.lat, lon: a.lon }, fires ? SEV.heads : SEV.info));
+  }
+  return out;
+}
+
+// Cross-signal: independent signals close together in place and time.
+export function crossSignal(ctx, place, recent) {
+  const pts = recent.filter((e) => e.data?.pos || (e.distKm != null && e.data?.lat != null)).map((e) => ({ e, lat: e.data.pos?.lat ?? e.data.lat, lon: e.data.pos?.lon ?? e.data.lon }));
+  const out = [];
+  const done = new Set();
+  for (const p of pts) {
+    const near = pts.filter((q) => distKm(p.lat, p.lon, q.lat, q.lon) <= 8 && Math.abs((q.e.t || ctx.now.getTime()) - (p.e.t || ctx.now.getTime())) <= 3600e3);
+    const kinds = [...new Set(near.map((q) => q.e.check))].filter((k) => k !== 'infer');
+    if (kinds.length < 2) continue;
+    const cell = `${Math.round(p.lat * 10)}:${Math.round(p.lon * 10)}`;
+    if (done.has(cell)) continue;
+    done.add(cell);
+    const w = where(place, p.lat, p.lon);
+    out.push(inference(place, `cross:${cell}:${localParts(ctx.now, ctx.settings.tz).date}`, `something is happening ${w.text}`,
+      `${kinds.length} separate signals point to the same spot ${w.text} of ${place.name} within the hour.`,
+      kinds.length >= 3 ? 'high' : 'medium', near.map((q) => `${q.e.title} (${q.e.check})`).slice(0, 6), { lat: p.lat, lon: p.lon }, kinds.length >= 3 ? SEV.heads : SEV.info));
+  }
+  return out;
+}
+
+// Hail likely at the place: a warning that named a hail size plus hail reports nearby today.
+export function hailInference(ctx, place, ps, recent) {
+  const tags = Object.values(ps.alertTags || {}).filter((t) => t.hail >= 0.75);
+  const reports = recent.filter((e) => e.check === 'storms' && /hail/i.test(e.title) && (e.distKm ?? 99) <= 15);
+  if (!tags.length || !reports.length) return [];
+  const maxWarn = Math.max(...tags.map((t) => t.hail));
+  const conf = reports.length >= 2 && maxWarn >= 1 ? 'high' : 'medium';
+  return [inference(place, `hail:${localParts(ctx.now, ctx.settings.tz).date}`, `hail fell at ${place.name}`,
+    `Hail likely fell at ${place.name}: the NWS warning named ${maxWarn.toFixed(2)} in hail and ${reports.length} hail report(s) came from within 15 km.`,
+    conf, [...tags.map((t) => `${t.event}: warned hail ${t.hail.toFixed(2)} in`), ...reports.map((r) => r.text)].slice(0, 6), null, SEV.heads)];
+}
+
+// Pattern of life: aircraft count now vs the same hour of the week.
+export function baselineInference(ctx, place, hist, countNow) {
+  const lp = localParts(ctx.now, ctx.settings.tz);
+  const h = String(lp.hour);
+  const sameHour = hist.filter((d) => d.acft?.[h] != null);
+  if (sameHour.length < 14) return [];
+  const dow = new Date(`${lp.date}T12:00:00Z`).getUTCDay();
+  const sameDow = sameHour.filter((d) => new Date(`${d.d}T12:00:00Z`).getUTCDay() === dow);
+  const pool = (sameDow.length >= 3 ? sameDow : sameHour).map((d) => d.acft[h]).sort((a, b) => a - b);
+  const med = pool[Math.floor(pool.length / 2)];
+  const basis = sameDow.length >= 3 ? `the same hour on ${lp.weekday}s (${sameDow.length} weeks)` : `this hour (${sameHour.length} days)`;
+  if (med >= 5 && countNow < med * 0.3) {
+    return [inference(place, `quietsky:${lp.date}:${h}`, 'unusually empty sky', `There are far fewer aircraft than usual over ${place.name} (${countNow} vs a typical ${med} for ${basis}). Possible flight restriction, airport closure or weather nearby.`, 'low', [`Now: ${countNow}`, `Typical: ${med} (${basis})`])];
+  }
+  if (countNow > med * 3 + 5) {
+    return [inference(place, `busysky:${lp.date}:${h}`, 'unusually busy sky', `There are many more aircraft than usual over ${place.name} (${countNow} vs a typical ${med} for ${basis}).`, 'low', [`Now: ${countNow}`, `Typical: ${med} (${basis})`])];
+  }
+  return [];
+}
 
 // --- Tropical systems: is the place inside an NHC forecast cone?
 CHECKS.tropical = async (ctx, place, ps, shared) => {
@@ -581,6 +686,195 @@ CHECKS.launch = async (ctx, place) => {
   return { events, metrics: {}, count: n };
 };
 
+// ======================================================================= camera AI (opt-in)
+// Only public DOT cameras from GodView's own layers; never private feeds.
+export const CAM_HOSTS = ['511ga.org', 'cwwp2.dot.ca.gov'];
+export function camAllowed(u) {
+  try { const x = new URL(u); return x.protocol === 'https:' && CAM_HOSTS.includes(x.hostname); } catch { return false; }
+}
+const CAM_PROMPT = 'You are looking at one frame from a public road traffic camera. Report ONLY what is clearly visible in this image. Do not guess about anything outside the frame or about causes. Reply with JSON only, no other text: {"findings":[{"what":"smoke|fire|flooding|crash|stopped_traffic|snow_ice|nothing_notable","confidence":0.0,"note":"under 15 words"}]}. Use "nothing_notable" if the scene looks normal, dark, blurry or the camera is offline. Confidence 0 to 1.';
+const CAM_WORDS = { smoke: 'smoke', fire: 'fire', flooding: 'water over the road', crash: 'a crash', stopped_traffic: 'stopped traffic', snow_ice: 'snow or ice on the road' };
+function b64(buf) {
+  const bytes = new Uint8Array(buf); let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+export async function analyseFrame(ctx, cam) {
+  if (ctx.sub >= ctx.budget - 1) throw new Error('skipped: subrequest budget');
+  ctx.sub += 2;
+  const img = await ctx.fetch(cam.url, { headers: { 'User-Agent': UA } });
+  if (!img.ok) throw new Error(`camera HTTP ${img.status}`);
+  const type = (img.headers.get('content-type') || 'image/jpeg').split(';')[0];
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(type)) throw new Error(`camera returned ${type}`);
+  const buf = await img.arrayBuffer();
+  if (buf.byteLength > 4.5e6) throw new Error('camera image too large');
+  const res = await ctx.fetch(SRC.anthropic, {
+    method: 'POST',
+    headers: { 'x-api-key': ctx.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: ctx.env.VISION_MODEL || ctx.env.BRIEF_MODEL || DEFAULT_MODEL, max_tokens: 300,
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: type, data: b64(buf) } }, { type: 'text', text: CAM_PROMPT }] }],
+    }),
+  });
+  if (!res.ok) throw new Error(`vision HTTP ${res.status}`);
+  const j = await res.json();
+  const text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+  const m = text.match(/\{[\s\S]*\}/);
+  const parsed = m ? JSON.parse(m[0]) : { findings: [] };
+  return (parsed.findings || []).filter((f) => f && typeof f.confidence === 'number');
+}
+export const CAM_THRESHOLD = 0.7;
+// Hourly per place (spread over the hour), or at once when a heads-up/act-now
+// event fired at this place in this run. Hard daily cap kept in state.
+export async function cameraChecks(ctx, place, idx, ps, events) {
+  if (!place.camAI || !place.cams?.length || !ctx.env.ANTHROPIC_API_KEY || ctx.test) return [];
+  const slot = Math.floor(ctx.now.getTime() / 300000);
+  const urgent = events.some((e) => e.sev >= SEV.heads && e.check !== 'camera');
+  if (!urgent && (slot + idx) % 12 !== 0) return [];
+  const day = localParts(ctx.now, ctx.settings.tz).date;
+  const st = ctx.state;
+  if (!st.camAI || st.camAI.date !== day) st.camAI = { date: day, used: 0 };
+  const cap = Number.isInteger(ctx.settings.camCap) ? ctx.settings.camCap : 50;
+  const out = [];
+  for (const cam of place.cams.slice(0, 3)) {
+    if (st.camAI.used >= cap) { st.camAI.capped = true; break; }
+    st.camAI.used++;
+    try {
+      const findings = await analyseFrame(ctx, cam);
+      for (const f of findings) {
+        if (f.what === 'nothing_notable' || f.confidence < CAM_THRESHOLD || !CAM_WORDS[f.what]) continue;
+        const sev = ['smoke', 'fire', 'flooding', 'crash'].includes(f.what) ? SEV.heads : SEV.info;
+        out.push(ev(place, 'camera', sev, `cam:${cam.id}:${f.what}:${hourKey(ctx)}`, `Camera shows ${CAM_WORDS[f.what]}`,
+          `The ${cam.name} camera appears to show ${CAM_WORDS[f.what]}${f.note ? ` (${String(f.note).slice(0, 80)})` : ''}. AI reading of one frame, ${Math.round(f.confidence * 100)}% confident.`,
+          '', null, { inference: true, confidence: f.confidence >= 0.85 ? 'high' : 'medium', evidence: [`Frame from ${cam.name}`, `Model: ${ctx.env.VISION_MODEL || ctx.env.BRIEF_MODEL || DEFAULT_MODEL}`], camera: cam.url }));
+      }
+    } catch (e) { (ps.camErr ||= {})[cam.id] = String(e.message || e).slice(0, 100); }
+  }
+  return out;
+}
+
+// ======================================================================= conditions reports
+// What verifiably happened at a point in a time window, each line with its
+// source and time, marked as official / reported / measured / estimated.
+// The SHA-256 of the canonical JSON lets the same report be re-verified later.
+export function canonical(v) {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).sort().filter((k) => v[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`;
+  return JSON.stringify(v);
+}
+export async function sha256Hex(text) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+const isoZ = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+const LSR_KIND = (t) => (/hail/i.test(t) ? 'hail' : /tornado|funnel/i.test(t) ? 'tornado' : /wind|tstm wnd|gust/i.test(t) ? 'wind' : /flood/i.test(t) ? 'flood' : 'other');
+
+export async function buildReport(ctx, { lat, lon, name, start, end, radiusKm = 16 }) {
+  const S = Date.parse(start); const E = Date.parse(end);
+  if (!Number.isFinite(S) || !Number.isFinite(E) || E <= S) throw new Error('start and end must be valid times, end after start');
+  if (E - S > 7 * 86400e3) throw new Error('the window can be at most 7 days');
+  const R = Math.min(50, Math.max(2, Number(radiusKm) || 16));
+  const place = { id: 'report', name: name || 'This point', lat: Number(lat), lon: Number(lon), radiusKm: R };
+  const items = []; const sources = []; const errors = [];
+  const add = (x) => items.push(x);
+  const fromHere = (la, lo) => { const w = where(place, la, lo); return { distanceKm: Math.round(w.km * 10) / 10, bearing: w.dir || null, place: w.text }; };
+  const tz = ctx.settings?.tz || DEFAULT_SETTINGS.tz;
+  const fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+  const pending = [];
+  const step = (label, fn) => { const i = sources.push({ name: label, ok: false, error: 'not run' }) - 1; pending.push((async () => { try { await fn(); sources[i] = { name: label, ok: true }; } catch (e) { sources[i] = { name: label, ok: false, error: String(e.message || e) }; errors.push(label); } })()); };
+
+  // 1) NWS storm-based warnings that covered this exact point (IEM archive)
+  await step('NWS warnings at this point (Iowa Environmental Mesonet archive)', async () => {
+    const u = `${SRC.sbwByPoint}?lat=${place.lat.toFixed(4)}&lon=${place.lon.toFixed(4)}&sdate=${isoZ(S - 86400e3).slice(0, 10)}&edate=${isoZ(E + 86400e3).slice(0, 10)}`;
+    const j = await get(ctx, u, { memo: false, timeoutMs: 20000 });
+    for (const w of j.sbws || []) {
+      const iss = Date.parse(w.issue.endsWith('Z') ? w.issue : w.issue + 'Z'); const exp = Date.parse(w.expire.endsWith('Z') ? w.expire : w.expire + 'Z');
+      if (!(iss < E && exp > S)) continue;
+      const tags = [w.issue_hailtag ? `hail ${w.issue_hailtag} in` : '', w.issue_windtag ? `wind ${w.issue_windtag} mph` : '', w.issue_tornadotag ? `tornado ${String(w.issue_tornadotag).toLowerCase()}` : ''].filter(Boolean).join(', ');
+      add({ section: 'warnings', kind: 'official', time: isoZ(iss), until: isoZ(exp),
+        text: `${w.ph_name || w.phenomena} ${w.sig_name || ''} (${w.wfo} #${w.eventid}) covered this point from ${fmtT(iss)} to ${fmtT(exp)}${tags ? `; warned for ${tags}` : ''}.`.replace(/\s+\(/, ' ('),
+        source: 'National Weather Service, via Iowa Environmental Mesonet', sourceUrl: w.url ? `https://mesonet.agron.iastate.edu${w.url}` : 'https://mesonet.agron.iastate.edu/vtec/',
+        data: { phenomena: w.phenomena, significance: w.significance, wfo: w.wfo, eventid: w.eventid, hailIn: w.issue_hailtag ?? null, windMph: w.issue_windtag ?? null } });
+    }
+  });
+  // 2) Local storm reports (hail, wind, tornado, flood) within the radius
+  await step('NWS local storm reports (Iowa Environmental Mesonet)', async () => {
+    const u = `${SRC.lsr}?sts=${isoZ(S).slice(0, 16)}Z&ets=${isoZ(E).slice(0, 16)}Z`;
+    const j = await get(ctx, u, { memo: false, timeoutMs: 25000 });
+    for (const f of j.features || []) {
+      const p = f.properties || {};
+      const [lo, la] = f.geometry?.coordinates || [p.lon, p.lat];
+      if (!Number.isFinite(la) || distKm(place.lat, place.lon, la, lo) > R) continue;
+      const t = Date.parse(String(p.valid).endsWith('Z') ? p.valid : `${p.valid}Z`);
+      const kind = LSR_KIND(p.typetext || p.type || '');
+      const mag = p.magnitude != null && p.magnitude !== '' ? `${p.magnitude}${kind === 'hail' ? ' in' : kind === 'wind' ? ' mph' : ''} ` : '';
+      const d = fromHere(la, lo);
+      add({ section: 'reports', kind: 'reported', time: isoZ(t), ...d,
+        text: `${mag}${String(p.typetext || 'Storm report').toLowerCase()} reported ${d.place} at ${fmtT(t)}${p.source ? ` by ${String(p.source).toLowerCase()}` : ''}${p.city ? ` (${p.city})` : ''}.`.replace(/^./, (c) => c.toUpperCase()),
+        source: 'NWS Local Storm Report, via Iowa Environmental Mesonet', sourceUrl: 'https://mesonet.agron.iastate.edu/lsr/',
+        data: { type: p.typetext || p.type, magnitude: p.magnitude ?? null, remark: p.remark || '', wfo: p.wfo || null } });
+    }
+  });
+  // 3) Radar-estimated rainfall (only available for the last 72 hours)
+  if (ctx.now.getTime() - E < 3 * 3600e3) {
+    await step('MRMS radar rainfall estimate (NOAA)', async () => {
+      const u = `${SRC.mrmsIdentify}?geometry=${encodeURIComponent(JSON.stringify({ x: place.lon, y: place.lat, spatialReference: { wkid: 4326 } }))}&geometryType=esriGeometryPoint&returnGeometry=false&returnCatalogItems=true&f=json`;
+      const j = await get(ctx, u, { memo: false, timeoutMs: 20000 });
+      const vals = j.properties?.Values || [];
+      const names = (j.catalogItems?.features || []).map((f) => f.attributes?.Name || f.attributes?.name || '');
+      const pairs = names.map((n, i) => [n, Number(vals[i])]).filter(([n, v]) => n && Number.isFinite(v) && v >= 0);
+      const pick = pairs.find(([n]) => /24/.test(n)) || pairs[0] || (Number.isFinite(Number(j.value)) ? ['MRMS QPE', Number(j.value)] : null);
+      if (pick) add({ section: 'rain', kind: 'estimated', time: isoZ(ctx.now.getTime()), text: `Radar-estimated rainfall at this point: ${pick[1].toFixed(2)} in (${pick[0]}, estimate at report time, not a gauge reading).`, source: 'NOAA MRMS quantitative precipitation estimate', sourceUrl: 'https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer', data: { product: pick[0], inches: pick[1] } });
+    });
+  }
+  // 4) Earthquakes in the window within 300 km
+  await step('USGS earthquake catalog', async () => {
+    const u = `${SRC.fdsn}?format=geojson&starttime=${isoZ(S)}&endtime=${isoZ(E)}&latitude=${place.lat}&longitude=${place.lon}&maxradiuskm=300&minmagnitude=2`;
+    const j = await get(ctx, u, { memo: false, timeoutMs: 20000 });
+    for (const f of j.features || []) {
+      const [lo, la, depth] = f.geometry.coordinates; const p = f.properties || {};
+      const d = fromHere(la, lo);
+      add({ section: 'quakes', kind: 'measured', time: isoZ(p.time), ...d, text: `Magnitude ${Number(p.mag).toFixed(1)} earthquake ${d.place} at ${fmtT(p.time)}, ${Math.round(depth)} km deep${p.felt ? `; ${p.felt} "Did You Feel It?" reports` : ''}.`, source: 'U.S. Geological Survey', sourceUrl: p.url || 'https://earthquake.usgs.gov/', data: { mag: p.mag, magType: p.magType, depthKm: depth, felt: p.felt ?? null, mmi: p.mmi ?? null } });
+    }
+  });
+  // 5) Wildfires and river stage: only the current state is available
+  if (ctx.now.getTime() - E < 6 * 3600e3) {
+    await step('Wildfires (NIFC, current)', async () => {
+      const r = await CHECKS.fires(ctx, { ...place, radiusKm: Math.max(R, 40) }, {});
+      for (const e of r.events) add({ section: 'fires', kind: 'official', time: isoZ(ctx.now.getTime()), distanceKm: e.distKm, bearing: e.dir, text: `${e.text} (status at report time).`, source: 'National Interagency Fire Center', sourceUrl: 'https://data-nifc.opendata.arcgis.com/' });
+    });
+    await step('River gauges (NOAA NWPS, current)', async () => {
+      const b = bbox(place.lat, place.lon, Math.max(R, 25));
+      const j = await get(ctx, fill(SRC.gauges, b), { memo: false, timeoutMs: 15000 });
+      const g = (j.gauges || []).filter((x) => x.latitude != null).map((x) => [distKm(place.lat, place.lon, x.latitude, x.longitude), x]).sort((a, b2) => a[0] - b2[0])[0];
+      if (g) { const o = g[1].status?.observed || {}; const d = fromHere(g[1].latitude, g[1].longitude); add({ section: 'rivers', kind: 'measured', time: o.validTime || isoZ(ctx.now.getTime()), ...d, text: `Nearest river gauge ${g[1].name} (${d.place}): ${o.primary ?? '?'} ${o.primaryUnit || ''}, ${CAT_NAME[o.floodCategory] || 'not rated'} (reading at report time).`, source: 'NOAA National Water Prediction Service', sourceUrl: `https://water.noaa.gov/gauges/${String(g[1].lid).toLowerCase()}` }); }
+    });
+  }
+  await Promise.all(pending);
+  items.sort((x, y) => String(x.time).localeCompare(String(y.time)) || x.text.localeCompare(y.text));
+  const summary = {
+    warnings: items.filter((i) => i.section === 'warnings').length,
+    hailReports: items.filter((i) => i.section === 'reports' && LSR_KIND(i.data?.type || '') === 'hail').length,
+    maxReportedHailIn: Math.max(0, ...items.filter((i) => i.section === 'reports' && LSR_KIND(i.data?.type || '') === 'hail').map((i) => Number(i.data.magnitude) || 0)),
+    maxWarnedHailIn: Math.max(0, ...items.filter((i) => i.section === 'warnings').map((i) => Number(i.data?.hailIn) || 0)),
+    maxReportedWindMph: Math.max(0, ...items.filter((i) => i.section === 'reports' && LSR_KIND(i.data?.type || '') === 'wind').map((i) => Number(i.data.magnitude) || 0)),
+  };
+  const report = {
+    schema: 'godview-conditions-report/1',
+    subject: { name: place.name, lat: Math.round(place.lat * 1e5) / 1e5, lon: Math.round(place.lon * 1e5) / 1e5, radiusKm: R },
+    window: { start: isoZ(S), end: isoZ(E), timeZone: tz },
+    generatedAt: isoZ(ctx.now.getTime()),
+    summary, items, sources,
+    notes: [
+      'Official = issued by a government agency; reported = a storm report from a spotter, the public or officials; measured = an instrument reading; estimated = a model or radar estimate.',
+      'Storm reports are preliminary and can be incomplete. Distances are straight-line from the point given.',
+      'This report lists public weather and hazard data for a location and time. It does not assess or confirm damage to any property.',
+    ],
+  };
+  const json = canonical(report);
+  return { report, json, sha256: await sha256Hex(json), incomplete: errors };
+}
+
 // ======================================================================= scheduling
 // Which checks are due this run. Heavier per-place checks are spread across runs.
 export function dueChecks(place, idx, now, test) {
@@ -636,7 +930,8 @@ function applyMetrics(ctx, ps, m) {
   if (m.aircraft != null) {
     // One sample per local hour (first run of the hour) keeps writes low.
     const h = String(localParts(ctx.now, ctx.settings.tz).hour);
-    if (t.acft[h] == null) t.acft[h] = m.aircraft;
+    if (t.acft[h] == null) { t.acft[h] = m.aircraft; (ctx.sampled ||= {})[ps.id] = m.aircraft; }
+    t.heli = Math.max(t.heli || 0, m.heli || 0);
   }
 }
 
@@ -829,6 +1124,15 @@ export async function runAll(env, now = new Date(), fetchImpl = fetch) {
     const ps = (state.places[place.id] ||= { id: place.id });
     ps.id = place.id;
     const { events, results } = await runPlace(ctx, place, idx, ps, shared);
+    // Inferences that combine this run's signals with the last hour of the log.
+    try {
+      const recentLog = (await kvGet(env, `log:${place.id}`, [])).filter((e) => now.getTime() - e.t < 3600e3);
+      const recent = [...events.map((e) => ({ ...e, t: now.getTime() })), ...recentLog];
+      events.push(...crossSignal(ctx, place, recent), ...hailInference(ctx, place, ps, recent));
+      if (ctx.sampled?.[place.id] != null) events.push(...baselineInference(ctx, place, await kvGet(env, `hist:${place.id}`, []), ctx.sampled[place.id]));
+      const cam = await cameraChecks(ctx, place, idx, ps, events);
+      events.push(...cam);
+    } catch (e) { state.health.infer = { ok: false, err: String(e.message || e), t: now.getTime() }; }
     for (const r of results) {
       const h = state.health[r.id];
       const okNow = r.ok || /budget/.test(r.error || '');
@@ -916,7 +1220,9 @@ export function validPlaces(list) {
     if (!KINDS[p.kind]) return null;
     const id = String(p.id || '').replace(/[^a-z0-9-]/gi, '').slice(0, 24);
     if (!id) return null;
-    out.push({ id, name: String(p.name || 'Place').slice(0, 60), lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5, radiusKm: Math.min(300, Math.max(1, r || 40)), kind: p.kind, checks: Array.isArray(p.checks) ? p.checks.filter((c) => CHECKS[c]) : undefined });
+    const cams = (Array.isArray(p.cams) ? p.cams : []).filter((c) => c && camAllowed(c.url)).slice(0, 6)
+      .map((c) => ({ id: String(c.id || '').slice(0, 40), name: String(c.name || 'Camera').slice(0, 80), url: String(c.url) }));
+    out.push({ id, name: String(p.name || 'Place').slice(0, 60), lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5, radiusKm: Math.min(300, Math.max(1, r || 40)), kind: p.kind, checks: Array.isArray(p.checks) ? p.checks.filter((c) => CHECKS[c]) : undefined, cams, camAI: !!p.camAI });
   }
   if (new Set(out.map((p) => p.id)).size !== out.length) return null;
   return out;
@@ -937,7 +1243,9 @@ export async function handle(req, env, fetchImpl = fetch) {
     const state = await kvGet(env, 'state', {});
     const days = {};
     for (const p of cfg.places) days[p.id] = (await kvGet(env, `hist:${p.id}`, [])).length;
-    return json(req, { ok: true, version: VERSION, places: cfg.places.length, lastRun: state.lastRun || null, health: state.health || {}, historyDays: days, settings: cfg.settings, notify: env.NTFY_TOPIC ? 'ntfy' : 'none', ai: !!env.ANTHROPIC_API_KEY });
+    const day = localParts(now, cfg.settings.tz).date;
+    const cam = state.camAI && state.camAI.date === day ? state.camAI : { date: day, used: 0 };
+    return json(req, { ok: true, version: VERSION, places: cfg.places.length, lastRun: state.lastRun || null, health: state.health || {}, historyDays: days, settings: cfg.settings, notify: env.NTFY_TOPIC ? 'ntfy' : 'none', ai: !!env.ANTHROPIC_API_KEY, cameraAI: { enabled: !!env.ANTHROPIC_API_KEY, used: cam.used, cap: cfg.settings.camCap ?? 50, places: cfg.places.filter((p) => p.camAI && p.cams?.length).length } });
   }
   if (req.method === 'GET' && path === '/places') {
     const cfg = await loadCfg(env);
@@ -958,6 +1266,7 @@ export async function handle(req, env, fetchImpl = fetch) {
     const s = { ...cur.settings };
     if (body.settings) {
       for (const k of ['briefHour', 'briefMinute', 'quietStart', 'quietEnd']) if (Number.isInteger(body.settings[k])) s[k] = body.settings[k];
+      if (Number.isInteger(body.settings.camCap)) s.camCap = Math.max(0, Math.min(200, body.settings.camCap));
       if (typeof body.settings.tz === 'string') { try { new Intl.DateTimeFormat('en-US', { timeZone: body.settings.tz }); s.tz = body.settings.tz; } catch { /* keep */ } }
     }
     await env.KV.put('cfg', JSON.stringify({ places, settings: s }));
@@ -1027,7 +1336,48 @@ export async function handle(req, env, fetchImpl = fetch) {
     const { results } = await runPlace(ctx, TEST_PLACE, 0, {}, {});
     const order = Object.keys(CHECKS);
     results.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    // Conditions-report sources, one real query each for the last 24 hours.
+    const t1 = Date.now();
+    try {
+      const r = await buildReport({ ...ctx, budget: ctx.sub + 12 }, { lat: TEST_PLACE.lat, lon: TEST_PLACE.lon, name: TEST_PLACE.name, start: new Date(now.getTime() - 86400e3).toISOString(), end: now.toISOString() });
+      for (const s2 of r.report.sources) results.push({ id: `report: ${s2.name}`, ok: s2.ok, count: s2.ok ? r.report.items.length : null, ms: Date.now() - t1, error: s2.error || null });
+    } catch (e) { results.push({ id: 'report', ok: false, count: null, ms: Date.now() - t1, error: e.message }); }
+    results.push({ id: 'camera AI', ok: true, count: null, ms: 0, error: null, note: env.ANTHROPIC_API_KEY ? 'key present (not called by the self-test)' : 'off: no ANTHROPIC_API_KEY' });
     return json(req, { ok: results.every((r) => r.ok), point: TEST_PLACE.name, ms: Date.now() - t0, subrequests: ctx.sub, checks: results, notify: env.NTFY_TOPIC ? 'ntfy configured' : 'no ntfy topic', ai: !!env.ANTHROPIC_API_KEY });
+  }
+  if (req.method === 'GET' && path === '/report') {
+    const q = url.searchParams;
+    const cfg = await loadCfg(env);
+    let lat = Number(q.get('lat')); let lon = Number(q.get('lon')); let name = q.get('name') || '';
+    const p = q.get('place') && cfg.places.find((x) => x.id === q.get('place'));
+    if (p) { lat = p.lat; lon = p.lon; name = name || p.name; }
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return json(req, { error: 'lat/lon or place required' }, 400);
+    const ctx = { ...ctxFor(true), settings: cfg.settings, budget: 30 };
+    let out;
+    try { out = await buildReport(ctx, { lat, lon, name: name.slice(0, 80), start: q.get('start'), end: q.get('end'), radiusKm: q.get('r') }); } catch (e) { return json(req, { error: e.message }, 400); }
+    // Store it so it can be verified later (at most 25 a day: 2 KV writes each).
+    const idx = await kvGet(env, 'reports', { day: '', n: 0, list: [] });
+    const today = localParts(now, cfg.settings.tz).date;
+    if (idx.day !== today) { idx.day = today; idx.n = 0; }
+    let stored = false;
+    if (q.get('store') !== '0' && idx.n < 25) {
+      await env.KV.put(`report:${out.sha256}`, out.json);
+      idx.n++; idx.list = [{ sha256: out.sha256, name: out.report.subject.name, start: out.report.window.start, end: out.report.window.end, at: out.report.generatedAt }, ...idx.list.filter((r) => r.sha256 !== out.sha256)].slice(0, 200);
+      await env.KV.put('reports', JSON.stringify(idx));
+      stored = true;
+    }
+    return json(req, { ...out, stored });
+  }
+  if (req.method === 'GET' && path === '/reports') {
+    return json(req, { reports: (await kvGet(env, 'reports', { list: [] })).list });
+  }
+  if (req.method === 'GET' && path.startsWith('/report/')) {
+    const hash = path.slice(8).toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(hash)) return json(req, { error: 'Bad report id' }, 400);
+    const text = await env.KV.get(`report:${hash}`);
+    if (!text) return json(req, { error: 'No stored report with that fingerprint' }, 404);
+    const check = await sha256Hex(text);
+    return json(req, { report: JSON.parse(text), json: text, sha256: check, verified: check === hash });
   }
   if (req.method === 'POST' && path === '/test-notify') {
     const ctx = { ...ctxFor(false), test: false };

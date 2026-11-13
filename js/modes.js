@@ -25,9 +25,13 @@ export const MODES = [
 export const GROUP_COLORS = { air: '#6fb7ff', space: '#b18cff', sea: '#3ee6c4', weather: '#ffb020', hazards: '#ff4d5e', ground: '#c6ff4a', signals: '#ff7ad9' };
 
 // Which layer ids a mode turns on (only layers that exist and have their key).
+// Layers whose only source is unreliable stay out of every mode (you can still
+// turn them on by hand in "All layers").
+export const UNRELIABLE = new Set(['alpr']);
+
 export function modeLayers(mode, layers, settings, apiKeys) {
   const have = (l) => !l.needsKey || apiKeys.get(l.needsKey);
-  if (mode.layers === '*') return layers.filter(have).map((l) => l.id);
+  if (mode.layers === '*') return layers.filter((l) => have(l) && !UNRELIABLE.has(l.id)).map((l) => l.id);
   if (mode.layers === 'custom') {
     const c = settings.get('customEnabled') || settings.get('enabled') || {};
     return layers.filter((l) => c[l.id] && have(l)).map((l) => l.id);

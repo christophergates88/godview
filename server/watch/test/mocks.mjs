@@ -22,12 +22,19 @@ export function makeFetch(opts = {}) {
       return res(F.nws(o.now, { tornado: o.tornado }));
     }
     if (h === 'www.spc.noaa.gov') return /csv/.test(p) ? res(F.spcCsv, 200, 'text/csv') : res(F.spcOutlook);
+    if (h === 'earthquake.usgs.gov' && /fdsnws/.test(p)) return res(F.fdsn(o.now, 33.749, -84.388));
     if (h === 'earthquake.usgs.gov') return res(F.usgs);
     if (h === 'services3.arcgis.com') return res(/Incident_Locations/.test(p) ? F.fireIncidents(o.fireKm) : F.firePerimeters);
     if (h === 'api.water.noaa.gov') return res(F.gauges(o.gauge));
     if (h === 'api.adsb.lol') return res(p.startsWith('/v2/sqk/') ? F.sqk(p.split('/').pop()) : F.aircraft);
     if (h === 'www.nhc.noaa.gov') return res(F.nhcStorms);
-    if (h === 'mapservices.weather.noaa.gov') return res(/query/.test(p) ? F.coneHit : F.nhcMap);
+    if (h === 'mapservices.weather.noaa.gov') return /mrms_qpe/.test(p) ? res(F.mrms) : res(/query/.test(p) ? F.coneHit : F.nhcMap);
+    if (h === 'mesonet.agron.iastate.edu') {
+      const lat = Number(u.searchParams.get('lat')) || 33.75; const lon = Number(u.searchParams.get('lon')) || -84.39;
+      return /sbw_by_point/.test(p) ? res(F.sbw(o.now)) : res(F.lsr(o.now, o.lsrLat ?? 33.749, o.lsrLon ?? -84.388));
+    }
+    if (h === 'earthquake.usgs.gov' && /fdsnws/.test(p)) return res(F.fdsn(o.now, 33.749, -84.388));
+    if (h === '511ga.org' || h === 'cwwp2.dot.ca.gov') { calls.cam = (calls.cam || 0) + 1; return new Response(F.camJpeg, { status: 200, headers: { 'Content-Type': 'image/jpeg' } }); }
     if (h === 'air-quality-api.open-meteo.com') return res(F.air(o.aqi));
     if (h === 'services.swpc.noaa.gov') return res(F.ovation);
     if (h === 'celestrak.org') return res(F.issOmm(o.now - 3 * 3600e3));
@@ -36,6 +43,11 @@ export function makeFetch(opts = {}) {
     if (h === 'ntfy.sh') { sent.push(JSON.parse(init.body)); return res({ id: 'x' }); }
     if (h === 'api.anthropic.com') {
       const b = JSON.parse(init.body);
+      const vision = Array.isArray(b.messages?.[0]?.content) && b.messages[0].content.some((c) => c.type === 'image');
+      if (vision) {
+        sent.vision = (sent.vision || []).concat([b]);
+        return res({ model: b.model, content: [{ type: 'text', text: o.visionText || '{"findings":[{"what":"flooding","confidence":0.86,"note":"water across both lanes"}]}' }] });
+      }
       sent.ai = b;
       if (o.anthropic === 'fail') return res({ error: { message: 'overloaded' } }, 529);
       return res({ model: b.model, content: [{ type: 'text', text: 'Test Home: rain and wind today. Do: take an umbrella.' }] });

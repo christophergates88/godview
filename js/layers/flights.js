@@ -89,6 +89,7 @@ export const PROVIDERS = [
           vrateMs: (a.baro_rate ?? a.geom_rate) != null ? (a.baro_rate ?? a.geom_rate) * 0.00508 : null,
           squawk: a.squawk,
           military: (Number(a.dbFlags) & 1) === 1,
+          cat: a.category,
           seenAt: now - (a.seen_pos || a.seen || 0) * 1000,
         };
       });
@@ -151,7 +152,7 @@ export default {
   count(ctx, data) { return data.list.length; },
 
   items() {
-    return [...flights.values()].map((f) => ({ key: f.key, lat: f.est?.lat ?? f.lat, lon: f.est?.lon ?? f.lon, altM: f.altM, onGround: f.onGround, title: f.callsign || String(f.key).toUpperCase(), type: f.type }));
+    return [...flights.values()].map((f) => ({ key: f.key, lat: f.est?.lat ?? f.lat, lon: f.est?.lon ?? f.lon, altM: f.altM, speedMs: f.speedMs, onGround: f.onGround, title: f.callsign || String(f.key).toUpperCase(), type: f.type, cat: f.cat, special: f.special, military: f.military, hist: f.hist }));
   },
 
   render(ctx, data) {
@@ -168,6 +169,8 @@ export default {
       } else Object.assign(item, f);
       item.special = isSpecial(item);
       item.fetchedAt = Date.now();
+      // A short track history (last 15 minutes) lets the app notice circling.
+      item.hist = [...(item.hist || []), { t: Date.now(), lat: f.lat, lon: f.lon, track: f.track }].filter((h) => Date.now() - h.t <= 15 * 60000).slice(-20);
       place(ctx, item, Date.now());
     }
     for (const [k, item] of flights) {

@@ -166,7 +166,7 @@ put_secret() {
 put_secret WATCH_TOKEN "$WATCH_TOKEN"
 put_secret NTFY_TOPIC "$NTFY_TOPIC"
 AKEY="$(kc_get godview-anthropic)"
-if [ -n "$AKEY" ]; then put_secret ANTHROPIC_API_KEY "$AKEY"; say "Claude wording for the brief: on."; else say "Claude wording for the brief: off (rule-based brief)."; fi
+if [ -n "$AKEY" ]; then put_secret ANTHROPIC_API_KEY "$AKEY"; say "Claude wording for the brief: on. Camera checks can be turned on per place in the app (off until you do; at most 50 pictures a day)."; else say "Claude wording for the brief: off (rule-based brief). Camera checks need this key too, so they stay off."; fi
 say "Secrets saved."
 
 # ---------------------------------------------------------------- 7. Self-test

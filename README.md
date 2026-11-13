@@ -33,12 +33,15 @@ and open `http://localhost:8000/` (opening `index.html` directly from disk will 
 | `js/globe.js` | The 3D globe (CesiumJS, no Cesium ion account): base maps, view styles, camera, tapping, follow, icons. |
 | `js/ui.js` | Everything you touch: grouped layer panel with filter, detail card (photos, audio, extra details), "What's here", search, my location, settings. |
 | `js/brief.js` | Builds the "What's here" briefing from the loaded layers. |
+| `js/infer.js` | "Possibly happening": educated guesses from aircraft and other signals in view (always labelled, with confidence and evidence). |
+| `js/reports.js` | The Reports screen and the printable Conditions report. |
+| `js/modes.js` | What each mode tile switches on; `UNRELIABLE` lists layers kept out of every mode. |
 | `js/core/layer-manager.js` | Runs the layers: timers, error back-off, staggered refreshes, pause in background, status, and `selfTest()`. |
 | `js/core/net.js` | Fetch with timeout, readable errors, cache, and `get()` which goes direct or through the data relay automatically. |
 | `js/core/settings.js`, `units.js` | Saved settings and keys (this browser only); imperial/metric formatting. |
 | `js/layers/index.js` | **The layer list** and a description of the layer interface. |
 | `js/layers/*.js` | One file per layer (46). `_template.js` is a starting point. |
-| `js/layers/lib/` | Shared helpers: `point-layer.js`, `shape-layer.js`, `imagery-layer.js` (layer factories), `overpass.js` (OpenStreetMap), `geo.js`, `icons.js`, `airports.js`. |
+| `js/layers/lib/` | Shared helpers: `point-layer.js`, `shape-layer.js`, `imagery-layer.js` (layer factories), `overpass.js` (OpenStreetMap, last-resort fallback), `arcgis.js` (map-service queries + main/fallback switch), `geo.js`, `icons.js`, `airports.js`. |
 | `extras/flight-relay-worker.js` | The data relay (Cloudflare Worker) source. Not loaded by the app. |
 | `test/` | Offline test harness (not part of the app). |
 
@@ -69,7 +72,8 @@ GitHub Pages address, and forwards only to the hosts in its allow-list:
 `nasstatus.faa.gov`, `www.ndbc.noaa.gov`, `www.nhc.noaa.gov`,
 `droughtmonitor.unl.edu`, `www.submarinecablemap.com`, `511ga.org`,
 and as fallbacks only (direct is tried first): `services3.arcgis.com`,
-`firms.modaps.eosdis.nasa.gov`, `overpass-api.de`.
+`firms.modaps.eosdis.nasa.gov`, `overpass-api.de`, `maps.nccs.nasa.gov`,
+`gis.fema.gov`, `mapservices.weather.noaa.gov`.
 
 Settings > Data relay holds the relay address (the built-in one is used when blank).
 
@@ -114,7 +118,10 @@ Day/night, US weather alerts, Earthquakes, Fires & events.
 | Ground | California traffic cameras | Caltrans CWWP2 | Direct | Area (California only) |
 | Ground | Amtrak trains | Amtraker API (unofficial) | Direct | |
 | Ground | Bike share docks | GBFS (6 Lyft-run US systems) | Direct | Area; nearest supported system |
-| Ground | Power plants, Nuclear plants, Plate-reader cameras (ALPR), Comms towers | OpenStreetMap via Overpass | Direct (relay fallback) | Area; one query at a time; volunteer-mapped, incomplete |
+| Ground | Power plants | HIFLD Open (EPA/EIA plants), 2025 copy kept by NASA | Direct (relay fallback) | Area; **a frozen 2025 snapshot, not live**; OpenStreetMap only if it is down |
+| Ground | Nuclear reactors | NRC daily power-reactor status, published by FEMA | Direct (relay fallback) | Shows % power; 0% usually means refuelling or maintenance; OpenStreetMap only if down |
+| Ground | Cell towers | HIFLD Open (FCC cellular licences), 2025 copy kept by NASA | Direct (relay fallback) | Loads only when zoomed in under 300 km; snapshot, not live |
+| Ground | Plate-reader cameras (ALPR) | OpenStreetMap via Overpass | Direct (relay fallback) | **Often unavailable** (Overpass is busy); volunteer-mapped; kept out of every mode, switch it on by hand |
 | Ground | Submarine cables | TeleGeography (CC BY-NC-SA) | Relay | Approximate routes |
 | Signals | Radio stations | radio-browser.info | Direct | Area; plays https streams only |
 | Signals | Wikipedia nearby | MediaWiki geosearch | Direct | Within 10 km of view centre |
@@ -131,8 +138,10 @@ news events (GDELT GEO endpoint could not be verified).
 ## Self-test
 
 Open the site, then in the browser console run `await GodView.selfTest()`. Every
-layer does one real fetch for central Georgia (about 300 km), whether or not it
+layer does one real fetch for Macon, Georgia (about 300 km), whether or not it
 is switched on, and you get back a list of `{ id, name, ok, count, ms, via, error }`.
+Extra rows check the plane-details sources and the four Conditions report
+sources (warnings, storm reports, earthquakes, rainfall).
 It finishes within 60 seconds, draws nothing and changes no settings (it may
 save downloaded data in the cache, as normal use does).
 
@@ -190,7 +199,7 @@ route, client).
 
 **Alerts:** "act now" always notifies; "heads-up" notifies except in quiet hours
 (10 PM–6 AM), when it waits for the morning brief; "info" only goes in the brief.
-Nothing repeats. Places live only in your own Cloudflare storage, never in this
+Nothing repeats. "Possibly" items (see below) are always marked as guesses. Places live only in your own Cloudflare storage, never in this
 code. If a Keychain item `godview-anthropic` exists, Claude (model
 `claude-haiku-5-5`) words the brief using only the facts; otherwise the brief is
 rule-based.
@@ -200,6 +209,65 @@ storage) and `bash server/test/deploy-mock.sh fresh` (deploy script against a fa
 Keychain and a fake Cloudflare API). In the browser console on the live site,
 `await GodView.watchSelfTest()` runs every watch check once for a public test
 point (Georgia State Capitol) without sending alerts or saving anything.
+
+## Possibly happening, Conditions reports, Camera checks (v5)
+
+**Possibly happening (guesses, never facts).** GodView looks at what is loaded
+and, for the watch service, at each place every 5 minutes, and points out
+things nobody announced. Each one says "Possibly", has a confidence (low /
+medium / high) and lists the evidence it used. It shows in the top line (medium
+or high only, within about 20 miles), in "What's here" under "Possibly
+happening (not confirmed)" and in the Alerts list. Nothing new is drawn on the
+map. What it looks for:
+- an aircraft circling (turned more than 300° in the last 15 minutes);
+- a helicopter low and slow (may be landing or hovering, e.g. a medical flight);
+- two or more helicopters, military or emergency aircraft within 5 km;
+- a type used as an air tanker flying low (more confident near a listed fire);
+- different kinds of signal close together within an hour (storm report, fire,
+  road incident, quake, emergency aircraft);
+- likely hail at a place: a warning that named hail of 3/4 inch or more,
+  plus hail reports within 15 km;
+- a quieter or busier sky than normal for that hour and weekday. This needs
+  14 days of history; until then it says "not enough history yet".
+
+Not done, and why: go-arounds and holding patterns need longer aircraft tracks
+than the watch service keeps; power-outage hints need a public, keyless outage
+feed and none was found; radio/scanner transcription was not built because no
+scanner source found allows automated transcription.
+
+**Conditions report.** Reports screen (bell › Reports), a place's detail, or
+"Conditions report for this spot" in What's here. Pick a place or point, a
+time window (up to 7 days) and a radius. The report lists, each with its
+source, time and whether it is *official*, *reported*, *measured* or
+*estimated*:
+- NWS warnings that covered the exact point (with any hail/wind they named);
+- storm reports (hail, wind, tornado, flood) with distance and direction;
+- radar rainfall estimate (MRMS; only for windows ending in the last 3 hours);
+- earthquakes within 300 km;
+- fires and the nearest river gauge (current only, for recent windows);
+- links to the radar archive.
+It never says whether a property was damaged. Print it or save it as PDF;
+share or download the JSON. Its SHA-256 fingerprint is of the exact JSON; the
+page re-checks it, and when the watch service is connected the report is
+stored there (25 a day) so anyone can check it later at
+`/report/<fingerprint>`. Without the service it is built in the browser and is
+not stored. Hail size estimates from radar (MESH) are not included: no
+keyless source for them was found, so hail comes from warnings and reports.
+
+**Camera checks (off by default).** On a Georgia 511 or Caltrans camera card,
+"Watch this camera" adds that public road camera to one of your places (up to
+6). Turn on "Camera AI" for that place to have Claude look at a frame every
+hour, or straight away when a heads-up or act-now alert fires. Claude reports
+only what is visible (flooding, smoke, crash, blocked road, snow/ice); an
+alert is raised only at 70% confidence or more. A daily cap (50 pictures,
+shown in the app) is kept by the service. It needs the `godview-anthropic`
+Keychain item (the same one as the brief) and works only with Georgia 511 and
+Caltrans cameras, never private cameras. Model: `claude-haiku-5-5`, or set
+the `VISION_MODEL` variable on the worker.
+
+**Free-plan budget.** The watch run stays under 45 outside requests. A report
+uses about 6; each camera check uses 2 (the picture and Claude). The CPU-time
+limit of the free plan is the main risk with many places and cameras.
 
 ## Settings (all stored only in this browser)
 Units, start location (default: Georgia, USA), API keys (Georgia 511, NASA
@@ -248,7 +316,7 @@ addresses are never shown (they can be home addresses).
 | Notable people born here | Wikidata + Wikipedia | Direct | Only people with an English Wikipedia article, at their birthplace |
 | Federal money here | USAspending.gov | Direct (POST; no relay possible) | Top contract and grant recipients in the county, last 12 months; persons counted, never named |
 | EPA-regulated sites | EPA ECHO | Direct (relay fallback) | Up to 10 miles round the view centre (smaller where sites are dense); inspections, violations, penalties; red = violation now |
-| Hospitals & nursing homes | OpenStreetMap via Overpass | Direct (relay fallback) | Locations only, with a link to Medicare Care Compare for official star ratings (CMS's own data service blocks web pages and the relay) |
+| Hospitals & nursing homes | HIFLD Open hospitals and nursing homes (2025 copy kept by NASA); OpenStreetMap if down | Direct (relay fallback) | Locations only, with a link to Medicare Care Compare for official star ratings (CMS's own data service blocks web pages and the relay) |
 | Bank branches (FDIC) | FDIC BankFind | Direct (relay fallback) | One state per request; nearest branches kept |
 | Disaster declarations (FEMA) | OpenFEMA | Direct (relay fallback) | County and statewide declarations |
 | Missing children (NCMEC) | NCMEC state RSS | Relay | Official posters only, unchanged; placed at the town they name. Not AMBER Alerts. |

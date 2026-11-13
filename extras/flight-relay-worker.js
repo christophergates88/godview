@@ -24,6 +24,10 @@ const ALLOWED_HOSTS = [
   'services3.arcgis.com',         // NIFC wildfires (fallback only)
   'firms.modaps.eosdis.nasa.gov', // NASA FIRMS (fallback only)
   'overpass-api.de',              // OpenStreetMap Overpass (fallback only)
+  // added in GodView v5 (fallback only: direct is tried first)
+  'maps.nccs.nasa.gov',           // HIFLD Open mirror: power plants, towers, hospitals, nursing homes
+  'gis.fema.gov',                 // NRC reactor status (FEMA service)
+  'mapservices.weather.noaa.gov', // MRMS rainfall at a point
   // People & records
   'www.missingkids.org',          // NCMEC missing-children posters
   'tigerweb.geo.census.gov', 'api.census.gov', 'data.openstates.org', 'v3.openstates.org', 'api.open.fec.gov',

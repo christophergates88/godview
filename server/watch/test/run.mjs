@@ -81,7 +81,8 @@ const NIGHT = new Date('2026-11-13T02:00:00Z');
   const f = makeFetch({ now: Date.now(), fail: /earthquake\.usgs\.gov/ });
   const r = await (await W.handle(req('/selftest'), e, f)).json();
   const q = r.checks.find((c) => c.id === 'quakes');
-  check('a failing source is isolated', q && !q.ok && /503/.test(q.error) && r.checks.filter((c) => c.ok).length === r.checks.length - 1, q && q.error);
+  const failed = r.checks.filter((c) => !c.ok).map((c) => c.id);
+  check('a failing source is isolated (only the USGS-based rows fail)', q && !q.ok && /503/.test(q.error) && failed.every((id) => /quakes|USGS/.test(id)), failed.join(', '));
 }
 
 // ---------------------------------------------------------------- cron runs: events, severity, notify, dedupe, quiet hours
@@ -272,6 +273,106 @@ let afterFirst;
     const passes = W.visiblePasses(omm, 33.8053, -84.1455, new Date(epoch), 72);
     check('visible-pass finder returns sane passes', passes.every((p) => p.maxEl <= 90 && p.end - p.start < 12 * 60000), `${passes.length} visible passes in 72 h`);
   }
+}
+
+// ---------------------------------------------------------------- v5: inferences
+{
+  const place = { id: 'home', name: 'Test Home', lat: 33.8053, lon: -84.1455, radiusKm: 40, kind: 'home' };
+  const ctx = { now: new Date('2026-11-13T17:00:00Z'), settings: W.DEFAULT_SETTINGS, test: true };
+  const ac = (o) => ({ hex: Math.random().toString(16).slice(2, 8), lat: 33.80, lon: -84.14, alt_baro: 800, gs: 20, ...o });
+  const hov = W.aircraftInferences(ctx, place, {}, [ac({ t: 'EC35', flight: 'LIFE1 ' })]);
+  check('helicopter low and slow -> "Possibly: … landing or hovering" (low confidence, with evidence)', hov.some((e) => /^Possibly: helicopter landing/.test(e.title) && e.data.inference && e.data.confidence === 'low' && e.data.evidence.length));
+  const conv = W.aircraftInferences(ctx, place, {}, [ac({ t: 'H60', alt_baro: 3000, gs: 100 }), ac({ t: 'AS50', alt_baro: 2000, gs: 90, lat: 33.81 }), ac({ dbFlags: 1, t: 'C130', alt_baro: 9000, gs: 250, lon: -84.13 })]);
+  check('three special aircraft within 5 km -> convergence inference (medium)', conv.some((e) => /gathered in one spot/.test(e.title) && e.data.confidence === 'medium'));
+  const tank = W.aircraftInferences(ctx, place, { fires: { f1: 12 } }, [ac({ t: 'AT8T', alt_baro: 1500, gs: 140 })]);
+  check('air tanker low near a listed fire -> heads-up inference (medium)', tank.some((e) => /firefighting/.test(e.title) && e.sev === W.SEV.heads && e.data.confidence === 'medium'));
+  const none = W.aircraftInferences(ctx, place, {}, [ac({ t: 'B738', alt_baro: 35000, gs: 450 })]);
+  check('an ordinary airliner produces no inference', none.length === 0);
+  const t = ctx.now.getTime();
+  const recent = [
+    { check: 'storms', title: 'Tornado reported nearby', t, data: { pos: { lat: 33.70, lon: -84.10 } } },
+    { check: 'squawk', title: 'Aircraft emergency code 7700', t: t - 600e3, data: { pos: { lat: 33.72, lon: -84.12 } } },
+    { check: 'fires', title: 'Sample fire near Test Home', t: t - 900e3, data: { pos: { lat: 33.71, lon: -84.09 } } },
+    { check: 'storms', title: 'Hail far away', t, data: { pos: { lat: 35.5, lon: -80 } } },
+  ];
+  const cross = W.crossSignal(ctx, place, recent);
+  check('cross-signal: 3 different signals within 8 km and an hour -> one high-confidence card', cross.length === 1 && cross[0].data.confidence === 'high' && cross[0].data.evidence.length === 3 && /Possibly/.test(cross[0].text), JSON.stringify(cross.map((c) => c.text)));
+  const hail = W.hailInference(ctx, place, { alertTags: { a: { hail: 1.25, event: 'Severe Thunderstorm Warning' } } }, [{ check: 'storms', title: '1.75 in hail reported', distKm: 6, text: '1.75-inch hail reported at Sample.' }, { check: 'storms', title: '1.00 in hail reported', distKm: 9, text: '1-inch hail.' }]);
+  check('hail likely: warned hail size + nearby hail reports -> high-confidence inference', hail.length === 1 && hail[0].data.confidence === 'high' && /warning named 1.25 in hail/.test(hail[0].text));
+  const short = W.baselineInference(ctx, place, Array.from({ length: 5 }, (_, i) => ({ d: `2026-11-0${i + 1}`, acft: { 12: 20 } })), 1);
+  check('pattern of life: under 14 days of history -> no claim', short.length === 0);
+  const hist = Array.from({ length: 28 }, (_, i) => ({ d: new Date(Date.UTC(2026, 9, 10 + i)).toISOString().slice(0, 10), acft: { 12: 20 + (i % 3) } }));
+  const quiet = W.baselineInference(ctx, place, hist, 2);
+  check('pattern of life: far fewer aircraft than the same hour of the week -> low-confidence inference', quiet.length === 1 && /fewer aircraft than usual/.test(quiet[0].text) && quiet[0].data.confidence === 'low', quiet[0]?.text);
+}
+
+// ---------------------------------------------------------------- v5: warned hail/wind in alert text
+{
+  const e = env(); await seed(e, [F.PLACES[0]]);
+  const at = new Date('2026-11-13T17:00:00Z');
+  await W.runAll(e, at, makeFetch({ now: at.getTime() }));
+  const log = JSON.parse(e.KV.m.get('log:home'));
+  check('alert text carries the warning\'s hail size and wind gust', log.some((x) => /Tornado Warning/.test(x.title) && /warned for 1\.00 in hail, wind 60 MPH/.test(x.text)), log.find((x) => /Tornado Warning/.test(x.title))?.text);
+}
+
+// ---------------------------------------------------------------- v5: camera AI
+{
+  const cam = { id: 'ga-186', name: 'SR 44 at Sample Rd', url: 'https://511ga.org/map/Cctv/186' };
+  const bad = W.validPlaces([{ ...F.PLACES[0], cams: [cam, { id: 'x', name: 'Private', url: 'https://my-home-camera.example/snap.jpg' }], camAI: true }]);
+  check('only public DOT camera hosts are accepted', bad[0].cams.length === 1 && bad[0].cams[0].url === cam.url && bad[0].camAI === true);
+  const e = env({ ANTHROPIC_API_KEY: 'sk-test' });
+  await seed(e, [{ ...F.PLACES[0], cams: [cam, { ...cam, id: 'ga-187', url: 'https://511ga.org/map/Cctv/187' }], camAI: true }], { camCap: 1 });
+  let t = new Date('2026-11-13T17:00:00Z').getTime();
+  while (Math.floor(t / 300000) % 12 !== 0) t += 300000;
+  const f = makeFetch({ now: t, tornado: false });
+  await W.runAll(e, new Date(t), f);
+  const log = JSON.parse(e.KV.m.get('log:home') || '[]');
+  const ce = log.find((x) => x.check === 'camera');
+  check('camera AI: flooding seen with 86% confidence -> heads-up "Camera shows water over the road"', ce && ce.sev === W.SEV.heads && /appears to show water over the road/.test(ce.text) && /86% confident/.test(ce.text), ce?.text);
+  const v = f.sent.vision?.[0];
+  check('vision request: image block (base64 JPEG) before a strict "only what is visible" instruction', v && v.messages[0].content[0].type === 'image' && v.messages[0].content[0].source.type === 'base64' && v.messages[0].content[0].source.media_type === 'image/jpeg' && /ONLY what is clearly visible/.test(v.messages[0].content[1].text) && v.model === 'claude-haiku-5-5');
+  const st = JSON.parse(e.KV.m.get('state'));
+  check('daily cap enforced in KV (cap 1 -> 1 call, second camera skipped)', st.camAI.used === 1 && st.camAI.capped === true && f.sent.vision.length === 1, JSON.stringify(st.camAI));
+  const r = await (await W.handle(req('/status'), e, makeFetch({ now: t }))).json();
+  check('/status shows camera AI use and cap', typeof r.cameraAI.used === 'number' && r.cameraAI.cap === 1 && r.cameraAI.enabled && r.cameraAI.places === 1);
+  const e2 = env(); await seed(e2, [{ ...F.PLACES[0], cams: [cam], camAI: true }]);
+  const f2 = makeFetch({ now: t });
+  await W.runAll(e2, new Date(t), f2);
+  check('no ANTHROPIC_API_KEY -> no camera calls at all', !f2.sent.vision && !f2.calls.cam);
+  const e3 = env({ ANTHROPIC_API_KEY: 'sk-test' }); await seed(e3, [{ ...F.PLACES[0], cams: [cam], camAI: true }]);
+  const f3 = makeFetch({ now: t, tornado: false, visionText: '{"findings":[{"what":"nothing_notable","confidence":0.95}]}' });
+  await W.runAll(e3, new Date(t), f3);
+  check('nothing notable -> no event', !JSON.parse(e3.KV.m.get('log:home') || '[]').some((x) => x.check === 'camera'));
+}
+
+// ---------------------------------------------------------------- v5: conditions reports
+{
+  const e = env(); await seed(e);
+  const now = Date.now();
+  const start = new Date(now - 6 * 3600e3).toISOString(); const end = new Date(now).toISOString();
+  const f = makeFetch({ now, lsrLat: 33.8053, lsrLon: -84.1455 });
+  const r = await W.handle(req(`/report?place=home&start=${start}&end=${end}`), e, f);
+  const j = await r.json();
+  const sec = (s) => j.report.items.filter((i) => i.section === s);
+  check('report: warning that covered the point, with warned hail and wind', sec('warnings').length === 1 && /Severe Thunderstorm Warning \(FFC #123\) covered this point/.test(sec('warnings')[0].text) && /hail 1\.00 in, wind 60 mph/.test(sec('warnings')[0].text), sec('warnings')[0]?.text);
+  check('report: old warnings outside the window are left out', !j.report.items.some((i) => /#9\b/.test(i.text)));
+  check('report: storm reports within the radius with distance/bearing; far ones left out', sec('reports').length === 2 && sec('reports').every((i) => i.distanceKm < 16 && i.bearing) && !j.report.items.some((i) => /KS/.test(i.text)), sec('reports').map((i) => i.text).join(' | '));
+  check('report: every line marked official / reported / measured / estimated, with source and time', j.report.items.every((i) => ['official', 'reported', 'measured', 'estimated'].includes(i.kind) && i.source && i.time));
+  check('report: radar rainfall is marked as an estimate', sec('rain').length === 1 && sec('rain')[0].kind === 'estimated' && /1\.42 in/.test(sec('rain')[0].text));
+  check('report: summary of max reported/warned hail and wind', j.report.summary.maxReportedHailIn === 1.75 && j.report.summary.maxWarnedHailIn === 1 && j.report.summary.maxReportedWindMph === 62, JSON.stringify(j.report.summary));
+  check('report: no claim about damage to a property', j.report.notes.some((n) => /does not assess or confirm damage/.test(n)) && !JSON.stringify(j.report.items).match(/damaged|destroyed/i));
+  const re = await W.sha256Hex(W.canonical(j.report));
+  check('report: SHA-256 of the canonical JSON matches', re === j.sha256 && j.json === W.canonical(j.report));
+  check('report stored in KV (2 writes) for later verification', j.stored === true && e.KV.m.has(`report:${j.sha256}`));
+  const v = await (await W.handle(req(`/report/${j.sha256}`), e, f)).json();
+  check('verify route: stored report re-hashes to the same fingerprint', v.verified === true && v.sha256 === j.sha256);
+  e.KV.m.set(`report:${j.sha256}`, j.json.replace('1.75', '2.75'));
+  const v2 = await (await W.handle(req(`/report/${j.sha256}`), e, f)).json();
+  check('verify route: a tampered report fails verification', v2.verified === false);
+  const long = await W.handle(req(`/report?place=home&start=2026-01-01T00:00:00Z&end=2026-02-01T00:00:00Z`), e, f);
+  check('report window over 7 days is refused plainly', long.status === 400);
+  const list = await (await W.handle(req('/reports'), e, f)).json();
+  check('reports index lists the stored report', list.reports[0]?.sha256 === j.sha256);
 }
 
 const failed = results.filter((x) => !x).length;

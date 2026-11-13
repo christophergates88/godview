@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import * as F from './fixtures.mjs';
+import * as WF from '../server/watch/test/fixtures.mjs';
 import { answerPeople } from './fixtures-people.mjs'; // People & records sample data
 import * as W from '../server/watch/worker.js';
 import { KV as WatchKV, makeFetch as watchFetch } from '../server/watch/test/mocks.mjs';
@@ -51,7 +52,7 @@ export function answer(u, mode) {
   const T = (text, type = 'text/plain') => ({ status: 200, type, body: text });
   const people = answerPeople(u); if (people) return people; // People & records hosts
   switch (host) {
-    case 'earthquake.usgs.gov': return mode.quakesFail ? J({ error: 'x' }, 500) : J(F.usgs());
+    case 'earthquake.usgs.gov': if (/fdsnws/.test(p)) return J(WF.fdsn(Date.now(), 32.84, -83.63)); return mode.quakesFail ? J({ error: 'x' }, 500) : J(F.usgs());
     case 'celestrak.org': return J(F.celestrak());
     case 'eonet.gsfc.nasa.gov': return J(F.eonet());
     case 'api.weather.gov': return J(F.nws());
@@ -104,6 +105,16 @@ export function answer(u, mode) {
       return J(F.adsbdb(hex, cs));
     }
     case 'api.planespotters.net': return J(F.planespotters());
+    case 'maps.nccs.nasa.gov':
+      if (mode.infraDown) return { status: 500, type: 'application/json', body: '{"error":{"code":500,"message":"down"}}' };
+      if (/energy/.test(p)) return J(F.hifldPlants());
+      if (/communications/.test(p)) return J(F.hifldTowers());
+      if (/public_health\/FeatureServer\/0/.test(p)) return J(F.hifldHospitals());
+      if (/public_health\/FeatureServer\/1/.test(p)) return J(F.hifldNursing());
+      return J({ features: [] });
+    case 'mesonet.agron.iastate.edu': return J(/sbw_by_point/.test(p) ? WF.sbw(Date.now()) : WF.lsr(Date.now(), 32.84, -83.63));
+    case 'mapservices.weather.noaa.gov': return J(WF.mrms);
+    case 'gis.fema.gov': return mode.infraDown ? { status: 500, type: 'application/json', body: '{}' } : J(F.reactors());
     default:
       if (/^gbfs\./.test(host)) return J(/status/.test(p) ? F.gbfsStatus() : F.gbfsInfo());
       if (/arcgisonline|cartocdn|openstreetmap\.org|rainviewer\.com|gibs\.earthdata\.nasa\.gov/.test(host)) return { status: 200, type: 'image/png', body: TILE };
@@ -130,7 +141,7 @@ export async function setupRoutes(context, mode = {}) {
     if (host === WATCH_HOST && mode.watchEnv) {  // the watch service: real worker code, mocked sources
       const r = route.request();
       const req = new Request(url, { method: r.method(), headers: { ...r.headers(), origin: 'https://christophergates88.github.io' }, body: ['POST', 'PUT'].includes(r.method()) ? r.postData() : undefined });
-      const resp = await W.handle(req, mode.watchEnv, watchFetch({ now: Date.now() }));
+      const resp = await W.handle(req, mode.watchEnv, watchFetch({ now: Date.now(), lsrLat: 32.84, lsrLon: -83.63 }));
       const hdr = Object.fromEntries(resp.headers.entries());
       hdr['access-control-allow-origin'] = '*'; // test page runs on 127.0.0.1; real CORS rules are unit-tested in server/watch/test
       return route.fulfill({ status: resp.status, headers: hdr, body: await resp.text() });

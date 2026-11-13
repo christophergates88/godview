@@ -86,6 +86,7 @@
     <div class="card-actions">
       <button id="card-follow" class="btn primary" hidden>Follow</button>
       <button id="card-play" class="btn primary" hidden>Play</button>
+      <button id="card-cam" class="btn" hidden>Watch this camera</button>
       <button id="card-fly" class="btn">Fly to</button>
       <a id="card-link" class="btn" target="_blank" rel="noopener" hidden>Source</a>
     </div>
@@ -99,6 +100,7 @@
           <button data-tab="places" class="on">Places</button>
           <button data-tab="alerts">Alerts</button>
           <button data-tab="brief">Brief</button>
+          <button data-tab="reports">Reports</button>
         </div>
         <button id="watch-close" class="icon-btn small" aria-label="Close">
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
@@ -132,6 +134,9 @@
       <button id="hint-ok" class="btn primary">Got it</button>
     </div>
   </div>
+
+  <!-- Conditions report (printable) -->
+  <div id="report" class="report" hidden></div>
 
   <div id="toast" role="status" hidden></div>
   <div id="boot" class="boot">GODVIEW <span>starting…</span></div>

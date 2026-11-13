@@ -7,6 +7,8 @@ import { applyMode } from './modes.js';
 import * as globe from './globe.js';
 import { initUI } from './ui.js';
 import { watchSelfTest } from './watch.js';
+import { reportSourcesTest } from './reports.js';
+import { inferFromManager } from './infer.js';
 import { AIRCRAFT_INFO } from './config.js';
 import { fetchJSON } from './core/net.js';
 
@@ -65,5 +67,12 @@ export async function start() {
 
   // Handy for debugging in the browser console: GodView.manager.state
   // GodView.selfTest() checks every data source once (see README).
-  window.GodView = { viewer, manager, settings, layers: LAYERS, globe, selfTest: async (opts) => [...await manager.selfTest(opts), ...await aircraftInfoTest()], watchSelfTest };
+  window.GodView = { viewer, manager, settings, layers: LAYERS, globe, selfTest: async (opts) => {
+      // Layers, plane-card sources and report sources in parallel; always back within 60 s.
+      const cap = (p, id) => Promise.race([p, new Promise((r) => setTimeout(() => r([{ id, name: id, ok: false, count: null, ms: 57000, via: null, error: 'did not finish' }]), 57000))]);
+      const [a, b, c] = await Promise.all([manager.selfTest(opts), cap(aircraftInfoTest(), 'aircraftInfo'), cap(reportSourcesTest(), 'report')]);
+      return [...a, ...b, ...c];
+    },
+    watchSelfTest,
+    inferences: (lat, lon, km = 40) => { const v = globe.getView(); return inferFromManager(manager, { lat: lat ?? v.lat, lon: lon ?? v.lon }, km); } };
 }

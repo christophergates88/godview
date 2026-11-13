@@ -1,5 +1,8 @@
 // Automatic licence plate reader (ALPR) cameras mapped by volunteers in
 // OpenStreetMap (e.g. via DeFlock). Coverage is incomplete and varies by area.
+// RELIABILITY: no dependable alternative source was found (DeFlock publishes no
+// open dataset; it reads OpenStreetMap too), so this layer depends on the public
+// Overpass servers, which are often down. It is kept out of every mode.
 import { makePointLayer } from './lib/point-layer.js';
 import { ICONS } from './lib/icons.js';
 import { overpass, where, tagRows } from './lib/overpass.js';
@@ -25,5 +28,5 @@ export default makePointLayer({
       link: { href: `https://www.openstreetmap.org/node/${el.id}`, text: 'OpenStreetMap' },
     };
   }),
-  note: () => 'Volunteer-mapped; many cameras are not yet in OpenStreetMap',
+  note: () => 'Volunteer-mapped; source (OpenStreetMap Overpass) is often unavailable: not in any mode',
 });

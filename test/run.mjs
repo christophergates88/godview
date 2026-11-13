@@ -30,7 +30,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
 
   // Tap an earthquake
   const qKey = F.usgs().features[0].id;
-  await page.evaluate(() => window.GodView.globe.jumpTo(33.5, -83.4, 900));
+  await page.evaluate(() => window.GodView.globe.jumpTo(33.04, -83.63, 900));
   await page.waitForTimeout(800);
   let pos = await screenPos(page, 'earthquakes', qKey);
   if (pos) {
@@ -76,7 +76,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   }
 
   // Tap bare globe -> weather card
-  await page.evaluate(() => window.GodView.globe.jumpTo(32.75, -83.45, 900));
+  await page.evaluate(() => window.GodView.globe.jumpTo(32.75, -83.68, 900));
   await page.waitForTimeout(600);
   await page.evaluate(() => { for (const l of window.GodView.layers) window.GodView.manager.enable(l.id, false); });
   await page.waitForTimeout(300);
@@ -149,7 +149,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(outDir, 'desktop-failures.png') });
   // Desktop card
-  await page.evaluate(() => window.GodView.globe.jumpTo(33.5, -83.4, 900));
+  await page.evaluate(() => window.GodView.globe.jumpTo(33.04, -83.63, 900));
   await page.waitForTimeout(600);
   const ev = F.eonet().events[0].id;
   const pos = await screenPos(page, 'events', ev);
@@ -178,7 +178,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
-  await page.evaluate(() => window.GodView.globe.jumpTo(33.3, -83.4, 330));
+  await page.evaluate(() => window.GodView.globe.jumpTo(32.84, -83.63, 330));
   await page.waitForTimeout(2500);
   const nLayers = await page.evaluate(() => window.GodView.layers.length);
   check('registry has 25-60 layers', nLayers >= 25 && nLayers <= 60, String(nLayers));
@@ -189,7 +189,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   const res = await page.evaluate(() => window.GodView.selfTest());
   const after = await page.evaluate(() => localStorage.getItem('godview.settings.v1'));
   fs.writeFileSync(path.join(outDir, 'selftest-sample.json'), JSON.stringify(res, null, 1));
-  check('selfTest resolves < 60 s with one row per layer (+3 plane-card sources)', Array.isArray(res) && res.length === nLayers + 3 && Date.now() - t0 < 60000, `${res.length} rows in ${Date.now() - t0} ms`);
+  check('selfTest resolves < 60 s with one row per layer (+3 plane-card, +6 report sources)', Array.isArray(res) && res.length === nLayers + 3 + 6 && Date.now() - t0 < 60000, `${res.length} rows in ${Date.now() - t0} ms`);
   const bad = res.filter((r) => !r.ok);
   check('selfTest: every layer ok against sample data', bad.length === 0, bad.map((r) => `${r.id}: ${r.error}`).join(' | '));
   check('selfTest rows have the agreed fields', res.every((r) => ['id', 'name', 'ok', 'count', 'ms', 'via', 'error'].every((k) => k in r)));
@@ -233,6 +233,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
     await page.waitForTimeout(1200);
     const pp = await screenPos(page, 'peopleOfficials', 'here');
     if (opened && pp) { await page.mouse.click(pp.x, pp.y); await page.waitForTimeout(1500); }
+    await page.waitForFunction(() => /Raised/.test(document.getElementById('card-rows').innerText), null, { timeout: 8000 }).catch(() => {});
     const cardInfo = await page.evaluate(() => ({ title: document.getElementById('card-title').textContent, links: document.querySelectorAll('#card-extra .gv-links a').length, rows: document.getElementById('card-rows').innerText }));
     check('[people] tap opens officials card with link buttons and campaign totals', /Bibb County/.test(cardInfo.title) && cardInfo.links >= 6 && /Raised \$12\.3M/.test(cardInfo.rows), `${cardInfo.title} links=${cardInfo.links} ${cardInfo.rows.replace(/\s+/g, ' ').slice(0, 160)}`);
     await page.screenshot({ path: path.join(outDir, 'desktop-people-officials.png') });
@@ -323,7 +324,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.click('#wf-save');
   await page.waitForTimeout(800);
   const cfg = JSON.parse(watchEnv.KV.m.get('cfg') || '{}');
-  check('add place by search saves it to the watch service', cfg.places?.length === 1 && cfg.places[0].name === 'Test Home' && Math.abs(cfg.places[0].lat - 33.749) < 0.01, JSON.stringify(cfg.places));
+  check('add place by search saves it to the watch service', cfg.places?.length === 1 && cfg.places[0].name === 'Test Home' && Math.abs(cfg.places[0].lat - 33.289) < 0.01, JSON.stringify(cfg.places));
   // Add a second place by tapping the globe
   await page.click('#wd-back');
   await page.click('#w-add');
@@ -379,7 +380,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.click('#watch-close');
   // watchSelfTest and What's here with the server check
   const wst = await page.evaluate(() => window.GodView.watchSelfTest());
-  check('GodView.watchSelfTest() returns per-check results', wst.checks.length === 12 && wst.checks.every((c) => c.ok), JSON.stringify(wst.checks.map((c) => c.id + ':' + c.ok)));
+  check('GodView.watchSelfTest() returns per-check results (12 checks + report sources + camera AI)', wst.checks.length >= 19 && wst.checks.every((c) => c.ok), JSON.stringify(wst.checks.map((c) => c.id + ':' + c.ok)));
   await page.click('#btn-brief');
   await page.waitForTimeout(2500);
   const wh = await page.evaluate(() => document.getElementById('card-brief').innerText);
@@ -434,12 +435,12 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   const sp = await page.evaluate(() => ['a0000a', 'a00014', 'a00015'].map((k) => { const f = window.GodView.manager.ctx.flights.primitives; return window.GodView.manager.describe('flights', k)?.subtitle; }));
   check('emergency and military aircraft are flagged', /Emergency code 7700/.test(sp[0]) && /Military/.test(sp[1]) && /Military/.test(sp[2]), sp.join(' | '));
   await page.screenshot({ path: path.join(outDir, 'after-iphone-status.png') });
-  await page.evaluate(() => window.GodView.globe.jumpTo(33.2, -84.0, 40));
+  await page.evaluate(() => window.GodView.globe.jumpTo(32.74, -84.23, 40));
   await page.waitForTimeout(2500);
   const near = await lodInfo();
   check('zoomed in: every aircraft in view is a full icon', near.icons >= near.dots && near.icons > 0, JSON.stringify(near));
   // Same idea for other busy layers (400 buoys)
-  await page.evaluate(() => { window.GodView.globe.jumpTo(32.75, -83.45, 3000); window.GodView.manager.enable('buoys', true); });
+  await page.evaluate(() => { window.GodView.globe.jumpTo(32.75, -83.68, 3000); window.GodView.manager.enable('buoys', true); });
   await page.waitForTimeout(3500);
   const busy = () => page.evaluate(() => { const c = window.GodView.manager.ctx.buoys.primitives.get(0); let n = 0; let small = 0; for (let i = 0; i < c.length; i++) { const p = c.get(i); if (p.show) { n++; if (p.pixelSize < 7) small++; } } return { shown: n, small, total: c.length }; });
   const bFar = await busy();
@@ -447,7 +448,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.waitForTimeout(2500);
   const bNear = await busy();
   check('busy point layers: far out, nearest 120 as small dots; close in, all at full size', bFar.total === 400 && bFar.shown <= 121 && bFar.small === bFar.shown && bNear.shown === 400 && bNear.small === 0, JSON.stringify({ bFar, bNear }));
-  await page.evaluate(() => { window.GodView.manager.enable('buoys', false); window.GodView.globe.jumpTo(33.2, -84.0, 40); });
+  await page.evaluate(() => { window.GodView.manager.enable('buoys', false); window.GodView.globe.jumpTo(32.74, -84.23, 40); });
   await page.waitForTimeout(1500);
   // Plain-sentence flight card with route, type, photo credit
   const key = 'a00064';
@@ -470,7 +471,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   if (card.open) await page.click('#card-close');
   await page.evaluate(() => window.GodView.settings.set('smoothMotion', true));
   // Status: tap opens What's here; touching the map shrinks it
-  await page.evaluate(() => window.GodView.globe.jumpTo(32.75, -83.45, 900));
+  await page.evaluate(() => window.GodView.globe.jumpTo(32.75, -83.68, 900));
   await page.waitForTimeout(1500);
   await page.touchscreen.tap(195, 500);
   await page.waitForTimeout(400);
@@ -528,6 +529,105 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await p2.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
   const again = await p2.evaluate(() => !document.getElementById('hint').hidden);
   check('first-run hint shows once and stays dismissed', shown && !again);
+  await c2.close();
+}
+
+// ------------------------------------------------------------ scenario 7 (v5): dependable infrastructure, inferences, reports, camera watch
+{
+  const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true };
+  const watchEnv = { KV: new WatchKV(), WATCH_TOKEN: 'k'.repeat(48), NTFY_TOPIC: 'gv-test' };
+  await watchEnv.KV.put('cfg', JSON.stringify({ places: [{ id: 'macon', name: 'Macon test place', lat: 32.84, lon: -83.63, radiusKm: 30, kind: 'home' }], settings: {} }));
+  const context = await browser.newContext(iphone);
+  const counts = await setupRoutes(context, { watchEnv });
+  await context.addInitScript(() => { try { localStorage.setItem('godview.apikeys.v1', JSON.stringify({ ga511: 'TESTKEY511' })); } catch { /* */ } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(BASE + '#watch=' + 'k'.repeat(48) + '@' + WATCH_HOST, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await page.click('#watch-close').catch(() => {});
+  await page.evaluate(() => { window.GodView.globe.jumpTo(32.84, -83.63, 150); for (const id of ['powerPlants', 'cellTowers', 'nuclear', 'peopleCare']) window.GodView.manager.enable(id, true); });
+  const st = await waitLayers(page, ['powerPlants', 'cellTowers', 'nuclear', 'peopleCare']);
+  check('power plants from the HIFLD mirror (generator rows merged into plants)', st.powerPlants.status === 'ok' && st.powerPlants.count === 2 && /HIFLD/.test(st.powerPlants.note), `${st.powerPlants.status} ${st.powerPlants.count} ${st.powerPlants.note} ${st.powerPlants.message}`);
+  check('cell towers from the HIFLD mirror', st.cellTowers.status === 'ok' && st.cellTowers.count === 2, `${st.cellTowers.status} ${st.cellTowers.count} ${st.cellTowers.message}`);
+  check('nuclear reactors with power level (NRC via FEMA)', st.nuclear.status === 'ok' && st.nuclear.count === 2, `${st.nuclear.status} ${st.nuclear.count} ${st.nuclear.message}`);
+  check('hospitals and nursing homes from the HIFLD mirror', st.peopleCare.status === 'ok' && st.peopleCare.count === 3, `${st.peopleCare.status} ${st.peopleCare.count} ${st.peopleCare.message}`);
+  const plant = await page.evaluate(() => window.GodView.manager.items('powerPlants').find((x) => /Generating/.test(x.title)));
+  check('plant card says it plainly (fuel, operator)', /makes electricity from gas and solar, run by Sample Power Co/.test(plant.say), plant.say);
+  const careNames = await page.evaluate(() => window.GodView.manager.items('peopleCare').map((x) => x.title).join(' | '));
+  check('care homes: a person-like name is not shown', !/Mary Smith/i.test(careNames) && /private name not shown/.test(careNames), careNames);
+  const r0 = await page.evaluate(() => window.GodView.manager.items('nuclear').find((x) => /2/.test(x.title)));
+  check('reactor at 0% explained in plain words', /0% power/.test(r0.say) && /refuelling or maintenance/.test(r0.say), r0.say);
+  check('Overpass not called when the main sources answer', !(counts['overpass-api.de'] > 0) && !(counts['overpass.private.coffee'] > 0), JSON.stringify({ o: counts['overpass-api.de'] }));
+
+  // Inferences from what is loaded (two helicopters low over Macon)
+  await page.evaluate(() => { window.GodView.manager.enable('flights', true); window.GodView.globe.jumpTo(32.84, -83.63, 300); });
+  await waitLayers(page, ['flights']);
+  const inf = await page.evaluate(() => window.GodView.inferences(32.84, -83.63));
+  check('app inference: helicopter low and slow -> "landing or hovering" (low confidence)', inf.some((x) => x.kind === 'hover' && x.confidence === 'low' && /LIFE1/.test(x.text)), JSON.stringify(inf.map((x) => x.kind)));
+  check('app inference: two helicopters within 5 km -> "special aircraft in one spot"', inf.some((x) => x.kind === 'converge' && x.evidence.length === 2), JSON.stringify(inf.map((x) => [x.kind, x.evidence])));
+  await page.click('#btn-brief');
+  await page.waitForTimeout(3000);
+  const wh = await page.evaluate(() => document.getElementById('card-brief').innerText);
+  check("What's here shows inferences, labelled not confirmed, with confidence", /Possibly happening \(not confirmed\)/i.test(wh) && /low confidence/.test(wh), wh.slice(0, 300).replace(/\s+/g, ' '));
+  await page.screenshot({ path: path.join(outDir, 'after-iphone-inference.png') });
+
+  // Conditions report from What's here (watch connected: built and stored by the service)
+  await page.click('#card-brief button:last-child');
+  await page.waitForTimeout(600);
+  const tab = await page.evaluate(() => document.querySelector('#watch-tabs button.on')?.dataset.tab);
+  check('"Conditions report for this spot" opens the Reports tab', tab === 'reports');
+  await page.click('#rp-go');
+  await page.waitForFunction(() => !document.getElementById('report').hidden, null, { timeout: 30000 }).catch(() => {});
+  const rp = await page.evaluate(() => ({ text: document.getElementById('report').innerText, hash: document.querySelector('#report .hash')?.textContent }));
+  check('report shows the warning, storm reports with distance, sources and a verified SHA-256', /Severe Thunderstorm Warning \(FFC #123\) covered this point/.test(rp.text) && /reported .* mi [NSEW]/i.test(rp.text) && /Sources checked/.test(rp.text) && /SHA-256 [0-9a-f]{64} \(fingerprint checks out\) · stored for verification/.test(rp.hash), rp.hash);
+  check('report marks lines Official / Reported / Estimated and says it does not assess damage', /OFFICIAL/i.test(rp.text) && /REPORTED/i.test(rp.text) && /ESTIMATED/i.test(rp.text) && /does not assess or confirm damage/.test(rp.text));
+  await page.screenshot({ path: path.join(outDir, 'after-iphone-report.png'), fullPage: false });
+  await page.emulateMedia({ media: 'print' });
+  const printOnly = await page.evaluate(() => getComputedStyle(document.getElementById('topbar')).display === 'none' && getComputedStyle(document.querySelector('.rp-bar')).display === 'none' && getComputedStyle(document.querySelector('.paper')).display !== 'none');
+  check('print view shows only the report page', printOnly);
+  await page.pdf?.({ path: path.join(outDir, 'after-report.pdf'), format: 'Letter' }).catch(() => {});
+  await page.emulateMedia({ media: 'screen' });
+  const stored = await watchEnv.KV.get('reports');
+  check('the service stored the report for later verification', stored && JSON.parse(stored).list.length === 1);
+  await page.click('#rp-close');
+
+  // Camera watch: add a Georgia 511 camera to the watched place from its card
+  await page.click('#watch-close').catch(() => {});
+  await page.evaluate(() => { window.GodView.manager.enable('flights', false); window.GodView.manager.enable('ga511Cameras', true); });
+  await waitLayers(page, ['ga511Cameras']);
+  const camKey = '186';
+  await page.evaluate((k) => { const it = window.GodView.manager.items('ga511Cameras').find((x) => x.key === k); window.GodView.globe.jumpTo(it.lat, it.lon, 15); }, camKey);
+  await page.waitForTimeout(1500);
+  const cp = await screenPos(page, 'ga511Cameras', camKey);
+  if (cp) { await page.touchscreen.tap(cp.x, cp.y); await page.waitForTimeout(800); }
+  const camBtn = await page.evaluate(() => !document.getElementById('card-cam').hidden);
+  check('camera card offers "Watch this camera" when the service is connected', camBtn);
+  if (camBtn) { await page.click('#card-cam'); await page.waitForTimeout(1000); }
+  const cfg = JSON.parse(await watchEnv.KV.get('cfg'));
+  check('camera saved on the place (public 511GA URL only)', cfg.places[0].cams?.length === 1 && /^https:\/\/511ga\.org\//.test(cfg.places[0].cams[0].url), JSON.stringify(cfg.places[0].cams));
+  const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource/.test(e));
+  check('[v5] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
+  await context.close();
+
+  // Main infrastructure source down -> OpenStreetMap fallback, said plainly
+  const c2 = await browser.newContext(iphone);
+  await setupRoutes(c2, { infraDown: true });
+  const p2 = await c2.newPage();
+  await p2.goto(BASE, { waitUntil: 'load' });
+  await p2.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await p2.evaluate(() => { window.GodView.globe.jumpTo(32.84, -83.63, 150); window.GodView.manager.enable('powerPlants', true); });
+  const s2 = await waitLayers(p2, ['powerPlants']);
+  check('HIFLD down -> falls back to OpenStreetMap and says so', s2.powerPlants.status === 'ok' && s2.powerPlants.count >= 1 && /Main source down/.test(s2.powerPlants.note), `${s2.powerPlants.status} ${s2.powerPlants.note} ${s2.powerPlants.message}`);
+  // Reports without the Watch service: built in the browser, same fingerprint scheme, not stored
+  await p2.click('#btn-watch');
+  await p2.click('#watch-tabs button[data-tab="reports"]');
+  await p2.waitForTimeout(300);
+  await p2.click('#rp-go');
+  await p2.waitForFunction(() => !document.getElementById('report').hidden, null, { timeout: 30000 }).catch(() => {});
+  const local = await p2.evaluate(() => document.querySelector('#report .hash')?.textContent || '');
+  check('report works without the Watch service (built in the app, fingerprint checks out, not stored)', /fingerprint checks out/.test(local) && !/stored/.test(local), local);
   await c2.close();
 }
 

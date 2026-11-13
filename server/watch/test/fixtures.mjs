@@ -12,7 +12,7 @@ export function nws(now, { tornado = true } = {}) {
   return {
     type: 'FeatureCollection',
     features: tornado ? [
-      { id: 'https://api.weather.gov/alerts/urn:oid:t1', properties: { id: 'urn:oid:t1', event: 'Tornado Warning', severity: 'Extreme', messageType: 'Alert', headline: 'Tornado Warning (sample)', expires: iso(now + 3600e3), ends: iso(now + 2700e3), instruction: 'TAKE COVER NOW! Move to a basement or an interior room on the lowest floor. Avoid windows.' } },
+      { id: 'https://api.weather.gov/alerts/urn:oid:t1', properties: { id: 'urn:oid:t1', event: 'Tornado Warning', severity: 'Extreme', messageType: 'Alert', headline: 'Tornado Warning (sample)', expires: iso(now + 3600e3), ends: iso(now + 2700e3), instruction: 'TAKE COVER NOW! Move to a basement or an interior room on the lowest floor. Avoid windows.', parameters: { maxHailSize: ['1.00'], maxWindGust: ['60 MPH'] } } },
       { id: 'https://api.weather.gov/alerts/urn:oid:w1', properties: { id: 'urn:oid:w1', event: 'Wind Advisory', severity: 'Moderate', messageType: 'Alert', expires: iso(now + 6 * 3600e3) } },
     ] : [],
   };
@@ -64,3 +64,26 @@ export function launches(now) {
   ] };
 }
 export const forecast = { daily: { temperature_2m_max: [61], temperature_2m_min: [30], precipitation_probability_max: [70], wind_gusts_10m_max: [44], weather_code: [63], sunrise: ['2026-11-13T06:59'], sunset: ['2026-11-13T17:34'], uv_index_max: [3] } };
+
+// ---------------------------------------------------------------- v5: report sources (formats from each service)
+export function sbw(now) {
+  const iso = (ms) => new Date(ms).toISOString().slice(0, 16) + 'Z';
+  return { sbws: [
+    { url: '/vtec/f/2026-O-NEW-KFFC-SV-W-0123', phenomena: 'SV', eventid: 123, significance: 'W', wfo: 'FFC', issue: iso(now - 3 * 3600e3), expire: iso(now - 2 * 3600e3), ph_name: 'Severe Thunderstorm', sig_name: 'Warning', issue_windtag: 60, issue_hailtag: '1.00', issue_tornadotag: null },
+    { url: '/vtec/f/2025-O-NEW-KFFC-TO-W-0009', phenomena: 'TO', eventid: 9, significance: 'W', wfo: 'FFC', issue: '2025-04-01T10:00Z', expire: '2025-04-01T10:45Z', ph_name: 'Tornado', sig_name: 'Warning' },
+  ] };
+}
+export function lsr(now, lat, lon) {
+  const iso = (ms) => new Date(ms).toISOString().slice(0, 19);
+  return { type: 'FeatureCollection', features: [
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [lon + 0.03, lat + 0.02] }, properties: { valid: iso(now - 2.5 * 3600e3), type: 'H', typetext: 'HAIL', magnitude: 1.75, city: 'Sample', county: 'Sample', st: 'GA', source: 'Trained Spotter', remark: 'Golf ball hail (sample)', wfo: 'FFC' } },
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [lon - 0.05, lat] }, properties: { valid: iso(now - 2.4 * 3600e3), type: 'G', typetext: 'TSTM WND GST', magnitude: 62, city: 'Sample', st: 'GA', source: 'ASOS', wfo: 'FFC' } },
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-98, 38] }, properties: { valid: iso(now - 2 * 3600e3), typetext: 'HAIL', magnitude: 3.0, st: 'KS' } },
+  ] };
+}
+export function fdsn(now, lat, lon) {
+  return { type: 'FeatureCollection', features: [{ type: 'Feature', id: 'us1', properties: { mag: 2.6, magType: 'md', time: now - 5 * 3600e3, url: 'https://earthquake.usgs.gov/earthquakes/eventpage/us1', felt: 3 }, geometry: { type: 'Point', coordinates: [lon + 0.4, lat - 0.3, 7.5] } }] };
+}
+export const mrms = { value: '1.42', properties: { Values: ['0.31', '1.42', '1.88'] }, catalogItems: { features: [{ attributes: { Name: 'QPE 1 Hour' } }, { attributes: { Name: 'QPE 24 Hour' } }, { attributes: { Name: 'QPE 72 Hour' } }] } };
+// A 1x1 JPEG-ish payload for camera tests (content is never decoded by the worker)
+export const camJpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xd9]);

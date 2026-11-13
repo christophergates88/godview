@@ -7,6 +7,7 @@ import { fetchJSON, fillUrl } from './core/net.js';
 import { escapeHtml, fmt } from './core/units.js';
 import { settings } from './core/settings.js';
 import * as globe from './globe.js';
+import { renderReportsTab, presetPoint } from './reports.js';
 
 const KEY = 'godview.watch.v1';
 const $ = (id) => document.getElementById(id);
@@ -137,8 +138,10 @@ function render() {
     if (tab === 'alerts') html += '<div id="w-alerts"><p class="muted">Loading…</p></div>';
     if (tab === 'brief') html += '<div id="w-brief"><p class="muted">Loading…</p></div>';
   }
+  if (tab === 'reports') html += '<div id="w-reports"></div>';
   body.innerHTML = html;
   wireCommon();
+  if (tab === 'reports') renderReportsTab($('w-reports'), { connected: connected() && lastStatus?.ok !== false, api, places: data.places, toast: toastFn });
   if (!connected()) return;
   if (tab === 'places' && !detailId) wirePlaces();
   if (tab === 'places' && detailId) renderDetail();
@@ -277,7 +280,9 @@ async function renderDetail() {
     <p class="muted small">${escapeHtml(n.note)}</p>
     <div class="timeline"><div class="bars">${bars}</div><input type="range" id="wd-scrub" min="0" max="29" value="29" aria-label="Pick a day"><div class="t-day" id="wd-day"></div></div>
     <div id="wd-events" class="events"></div>
+    ${camsHtml(p)}
     <div class="inline">
+      <button class="btn" id="wd-report">Conditions report</button>
       <button class="btn" id="wd-fly">Show on map</button>
       <button class="btn" id="wd-edit">Edit</button>
       <button class="btn danger" id="wd-del">Remove</button>
@@ -291,6 +296,8 @@ async function renderDetail() {
   show(29);
   $('wd-scrub').addEventListener('input', (e) => show(Number(e.target.value)));
   $('wd-back').addEventListener('click', () => { detailId = null; render(); });
+  $('wd-report').addEventListener('click', () => { presetPoint({ lat: p.lat, lon: p.lon, name: p.name }); open('reports'); });
+  wireCams(p);
   $('wd-fly').addEventListener('click', () => { close(); globe.flyTo(p.lat, p.lon, Math.max(30, p.radiusKm * 3)); globe.setMarker('place', p.lat, p.lon, '#3ee6c4'); });
   $('wd-edit').addEventListener('click', () => addForm(p));
   $('wd-del').addEventListener('click', async () => {
@@ -305,7 +312,9 @@ function eventsHtml(list, empty) {
     <div class="evt s${e.sev} ${e.handled ? 'done' : ''}">
       <div class="e-top"><span class="e-sev">${SEV[e.sev]?.[1] || ''}</span><span class="e-time">${escapeHtml(fmt.ago(e.t))}</span></div>
       <div class="e-title">${escapeHtml(e.title)}</div>
+      ${e.data?.inference ? `<div class="e-inf">Inference · ${escapeHtml(String(e.data.confidence))} confidence · not confirmed</div>` : ''}
       <div class="e-text">${escapeHtml(e.text)}</div>
+      ${e.data?.inference && e.data.evidence?.length ? `<ul class="e-evid">${e.data.evidence.slice(0, 5).map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : ''}
       ${e.todo ? `<div class="e-todo">${escapeHtml(e.todo)}</div>` : ''}
       ${e.handled ? '' : `<button class="btn small-btn" data-done="${escapeHtml(e.id)}">Done</button>`}
     </div>`).join('');
@@ -349,3 +358,41 @@ async function renderBrief(fresh) {
     <button class="btn" id="wb-now">Brief me now</button>`;
   $('wb-now').addEventListener('click', () => renderBrief(true));
 }
+
+// ---------------------------------------------------------------- cameras on a place (camera AI is opt-in)
+function camsHtml(p) {
+  const cams = p.cams || [];
+  const cam = lastStatus?.s?.cameraAI;
+  if (!cams.length) return '<p class="muted small">No cameras on this place. Tap a Georgia 511 or Caltrans camera on the map and choose "Watch this camera".</p>';
+  return `<div class="w-cams"><h4 class="sec-title">Cameras</h4>${cams.map((c) => `<div class="key-item"><span>${escapeHtml(c.name)}</span><button class="btn small-btn danger" data-rmcam="${escapeHtml(c.id)}">Remove</button></div>`).join('')}
+    <label class="field"><span>Camera AI<small>Claude looks at a frame every hour and when something happens nearby; reports only what is visible. ${cam ? `${cam.used} of ${cam.cap} looks used today.` : ''}${cam && !cam.enabled ? ' Needs the Anthropic key in the Watch service.' : ''}</small></span>
+    <span class="switch"><input type="checkbox" id="wd-camai" ${p.camAI ? 'checked' : ''}><span></span></span></label></div>`;
+}
+async function savePlace(np) {
+  const list = (data.places || []).map((x) => (x.id === np.id ? np : x));
+  const j = await api('/places', { method: 'PUT', body: { places: list } });
+  data.places = j.places;
+}
+function wireCams(p) {
+  document.querySelectorAll('[data-rmcam]').forEach((b) => b.addEventListener('click', async () => {
+    try { await savePlace({ ...p, cams: (p.cams || []).filter((c) => c.id !== b.dataset.rmcam) }); render(); } catch (e) { toastFn(`Could not save: ${e.message}`); }
+  }));
+  $('wd-camai')?.addEventListener('change', async (e) => {
+    try { await savePlace({ ...p, camAI: e.target.checked }); toastFn(e.target.checked ? 'Camera AI on for this place.' : 'Camera AI off.'); } catch (err) { toastFn(`Could not save: ${err.message}`); }
+  });
+}
+
+// Called from a camera's card: add it to a saved place (public DOT cameras only).
+export async function addCamera(cam, placeId) {
+  if (!connected()) throw new Error('Set up the Watch service first');
+  if (!data.places?.length) { const j = await api('/places'); data = j; }
+  const p = data.places.find((x) => x.id === placeId) || data.places[0];
+  if (!p) throw new Error('Add a place first');
+  const cams = [...(p.cams || []).filter((c) => c.id !== cam.id), cam].slice(-6);
+  await savePlace({ ...p, cams });
+  return p.name;
+}
+export const placesList = () => data.places || [];
+
+// Open the Reports tab for a point (from What's here).
+export function openReportsFor(pt) { presetPoint(pt); open('reports'); }

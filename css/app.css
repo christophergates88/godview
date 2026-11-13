@@ -473,3 +473,43 @@ body.card-open .sheet { transform: translateY(110%); }
 .gv-links a { font-size: 13px; font-weight: 700; color: var(--gv-text); text-decoration: none; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--gv-line); background: rgba(255,255,255,0.06); }
 .gv-links a:active { transform: scale(0.97); }
 @media (min-width: 900px) { .gv-stats { grid-template-columns: repeat(3, 1fr); } }
+
+/* =====================================================================
+   v5: inferences, conditions report (screen + print)
+   ===================================================================== */
+.e-inf { display: inline-block; margin: 2px 0 4px; padding: 3px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; background: rgba(177, 140, 255, 0.18); color: #c9b3ff; }
+.e-evid { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--gv-muted); }
+.w-cams { margin: 10px 0; }
+
+.report { position: fixed; inset: 0; z-index: 85; overflow-y: auto; background: #1b1f24; padding: calc(var(--safe-t) + 10px) 10px calc(var(--safe-b) + 20px); -webkit-overflow-scrolling: touch; }
+.report[hidden] { display: none; }
+.rp-bar { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; margin: 0 auto 10px; max-width: 820px; }
+.rp-bar .btn { flex: 1; }
+.paper { max-width: 820px; margin: 0 auto; background: #fff; color: #111; border-radius: 6px; padding: 28px 30px; font-size: 14px; line-height: 1.45; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+.paper header { border-bottom: 3px solid #111; padding-bottom: 12px; margin-bottom: 14px; }
+.rp-brand { font-size: 11px; font-weight: 900; letter-spacing: 0.22em; color: #0a7a63; }
+.paper h1 { margin: 4px 0 6px; font-size: 26px; }
+.rp-meta { color: #444; font-size: 13px; }
+.rp-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 6px; }
+.rp-tiles div { border: 1px solid #ccc; border-radius: 6px; padding: 8px 10px; }
+.rp-tiles span { display: block; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
+.rp-tiles b { font-size: 20px; }
+.paper h2 { font-size: 15px; margin: 18px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+.paper table { width: 100%; border-collapse: collapse; }
+.paper td { vertical-align: top; padding: 6px 4px; border-bottom: 1px solid #eee; }
+.paper td.k { width: 92px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+.paper td.k.official { color: #b3261e; } .paper td.k.reported { color: #a15c00; } .paper td.k.measured { color: #0a7a63; } .paper td.k.estimated { color: #5b4bb7; }
+.paper .src { font-size: 11.5px; color: #666; margin-top: 2px; word-break: break-word; }
+.paper .src a { color: #555; }
+.rp-src { padding-left: 18px; font-size: 13px; }
+.rp-notes p { font-size: 12px; color: #444; margin: 6px 0; }
+.paper footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 11px; color: #555; }
+.paper .hash { font-family: var(--gv-mono); word-break: break-all; margin-top: 4px; }
+@media (max-width: 600px) { .rp-tiles { grid-template-columns: repeat(2, 1fr); } .paper { padding: 18px 16px; } }
+@media print {
+  body.report-open > *:not(#report) { display: none !important; }
+  body.report-open { background: #fff; overflow: visible; height: auto; }
+  .report { position: static; padding: 0; background: #fff; overflow: visible; }
+  .no-print { display: none !important; }
+  .paper { max-width: none; border-radius: 0; padding: 0; }
+}
