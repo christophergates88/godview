@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import * as F from './fixtures.mjs';
 import * as WF from '../server/watch/test/fixtures.mjs';
 import { answerPeople } from './fixtures-people.mjs'; // People & records sample data
+import { answerEarth } from './fixtures-earth.mjs';    // Earth pack sample data
 import * as W from '../server/watch/worker.js';
 import { KV as WatchKV, makeFetch as watchFetch } from '../server/watch/test/mocks.mjs';
 
@@ -51,6 +52,7 @@ export function answer(u, mode) {
   const J = (obj, status = 200) => ({ status, type: 'application/json', body: JSON.stringify(obj) });
   const T = (text, type = 'text/plain') => ({ status: 200, type, body: text });
   const people = answerPeople(u); if (people) return people; // People & records hosts
+  const earth = answerEarth(u); if (earth) return earth;       // Earth pack hosts
   switch (host) {
     case 'earthquake.usgs.gov': if (/fdsnws/.test(p)) return J(WF.fdsn(Date.now(), 32.84, -83.63)); return mode.quakesFail ? J({ error: 'x' }, 500) : J(F.usgs());
     case 'celestrak.org': return J(F.celestrak());

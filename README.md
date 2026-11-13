@@ -337,3 +337,42 @@ its OSHA dataset could not be verified), FCC licences and FAA aircraft owners (n
 keyless source that gives the registrant type was verified; the filter for them,
 FAA type codes included, is ready in `privacy.js`), nonprofits (ProPublica's API
 cannot search by place), city 311/permit portals (no common source).
+
+## Earth pack: "Live from orbit" and more live systems (added 2026-11-12)
+
+23 more layers, all off until you switch them on, in `js/layers/earth-pack.js`. Every address
+was loaded from the live site first, so each one is known to answer a web page directly (no relay, no key).
+
+| Group | Layer | Source | Notes |
+|---|---|---|---|
+| Live from orbit | Live clouds: the Americas / the Pacific | NASA GIBS, GOES-East and GOES-West GeoColor | Newest frame, about an hour old, new every 10 minutes |
+| Live from orbit | Live clouds in infrared: Asia and Australia | NASA GIBS, Himawari | About an hour old |
+| Live from orbit | Rain and snow falling, worldwide | NASA GIBS, IMERG half-hourly | 5 to 7 hours behind |
+| Live from orbit | Sea surface temperature; Snow on the ground; Smoke, dust and haze; Air pollution (NO2); Flood water (3-day); Earth last night | NASA GIBS | Daily products, each a day or more behind |
+| Live from orbit | Where people live | NASA GIBS, SEDAC population density 2020 | Fixed picture |
+| Weather | US radar, full detail (NEXRAD) | Iowa Environmental Mesonet | National mosaic, new every 5 minutes, US only |
+| Weather | Weather radar sites and their status | NWS api.weather.gov | 159 radars: state, alarms, last data |
+| Earth hazards | World disaster alerts (GDACS) | gdacs.org | Green wildfires and droughts are left out to keep the map readable |
+| Earth hazards | Stream and lake gauges, live (USGS) | waterservices.usgs.gov | Area; can take 10 seconds |
+| Space | Deep Space Network | NASA DSN Now feed | Which spacecraft each dish is talking to |
+| Sea | Ships, live: Baltic Sea | Fintraffic Digitraffic AIS | Finland's waters only; worldwide ship feeds do not allow web pages |
+| Sea | Wave height at sea | Open-Meteo marine | Area grid; land points left out |
+| Sea | Sea marks | OpenSeaMap tiles | Zoom in near a coast |
+| Ground | High-voltage power lines (US) | HIFLD transmission lines | Area (60 km); first 500 lines in view; can take several seconds |
+| Ground | Railways of the world | OpenRailwayMap tiles | Personal, low-volume use |
+| Ground | 3D terrain | Esri World Elevation | A switch: real relief instead of a smooth globe |
+| Signals | Internet disruptions by country | IODA, Georgia Tech | One signal alone is often noise; two or more is a stronger sign |
+
+**Power plants and Nuclear plants now always load.** They used to ask OpenStreetMap's public
+servers, which are overloaded ("at capacity") most of the time. They now read a list that ships
+with GodView: `js/data/power-plants.json`, the World Resources Institute's Global Power Plant
+Database (21,337 plants of 10 MW and up, 2021 snapshot, CC BY 4.0). Plate-reader cameras and
+Comms towers still depend on OpenStreetMap's servers and say so when those are full.
+
+`js/layers/lib/gibs.js` makes a NASA picture layer from one line (see `js/layers/orbit.js`): NASA
+publishes about 1,300 products, so more are easy to add. Sample data for the tests is in
+`test/fixtures-earth.mjs`.
+
+Checked and still not possible without a relay or key: FAA flight restrictions and airport
+weather (aviationweather.gov and tfr.faa.gov refuse web pages), NASA fireball reports, US wind
+turbines (USGS), GDELT news events (did not answer), Safecast radiation (timed out).
