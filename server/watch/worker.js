@@ -14,7 +14,7 @@
 //
 // Privacy: places (names/coordinates) live only in KV, never in source code.
 
-export const VERSION = '3.1.1';
+export const VERSION = '3.1.2';
 const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 const APP_URL = 'https://christophergates88.github.io/godview/';
 const UA = 'GodView-Watch/3.0 (personal weather and hazard watcher; https://christophergates88.github.io/godview/)';
@@ -193,7 +193,9 @@ CHECKS.alerts = async (ctx, place, ps) => {
     now[id] = p.event;
     if (prev[id]) continue;
     const ev1 = String(p.event || 'Weather alert');
-    const act = /Tornado Warning|Flash Flood Warning|Extreme Wind|Hurricane Warning|Storm Surge Warning|Tsunami Warning|Evacuation|Shelter in Place|Fire Warning|Dust Storm Warning/i.test(ev1) || p.severity === 'Extreme';
+    // Act now: what the NWS itself sends to phones as emergency alerts (including severe thunderstorms tagged
+    // "destructive"), or anything rated Extreme. Same rule as the app's Now tab (js/lookout/feeds.js alertLevel).
+    const act = !/Watch/i.test(ev1) && (/Tornado Warning|Flash Flood Warning|Extreme Wind|Hurricane Warning|Storm Surge Warning|Tsunami Warning|Snow Squall Warning|Evacuation|Shelter in Place|Fire Warning|Dust Storm Warning/i.test(ev1) || p.severity === 'Extreme' || /destructive/i.test(String((p.parameters?.thunderstormDamageThreat || [])[0] || '')));
     const sev = act ? SEV.act : (/Warning/i.test(ev1) || p.severity === 'Severe') ? SEV.heads : SEV.info;
     const updated = p.messageType === 'Update';
     const until = p.ends || p.expires;

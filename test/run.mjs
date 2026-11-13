@@ -817,7 +817,15 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   // Now shows before the globe has finished starting
   await page.waitForFunction(() => /Sampleville/.test(document.getElementById('lk-place-name')?.textContent || '') && document.querySelector('#nw-hero .temp'), null, { timeout: 30000 }).catch(() => {});
   const early = await page.evaluate(() => ({ tab: document.body.className, now: !document.getElementById('lk-now').hidden, booting: !!document.getElementById('boot'), hero: document.getElementById('nw-hero')?.innerText || '' }));
-  check('opens on Now (place, weather and alert) without waiting for the globe', /tab-lk/.test(early.tab) && early.now && /Act now/i.test(early.hero) && /Severe Thunderstorm Warning/.test(early.hero) && /°F/.test(early.hero), JSON.stringify(early).slice(0, 300));
+  check('opens on Now (place, weather and alert) without waiting for the globe', /tab-lk/.test(early.tab) && early.now && /Heads-up/i.test(early.hero) && /Severe Thunderstorm Warning/.test(early.hero) && /°F/.test(early.hero), JSON.stringify(early).slice(0, 300));
+  const lv = await page.evaluate(async () => {
+    const m = await import('./js/lookout/feeds.js');
+    const L = (event, severity, urgency, threat = '') => m.alertLevel({ event, severity, urgency, threat });
+    return { tor: L('Tornado Warning', 'Extreme', 'Immediate'), ffw: L('Flash Flood Warning', 'Severe', 'Immediate'), hur: L('Hurricane Warning', 'Extreme', 'Expected'), squall: L('Snow Squall Warning', 'Severe', 'Immediate'), svrDestructive: L('Severe Thunderstorm Warning', 'Severe', 'Immediate', 'DESTRUCTIVE'),
+      svr: L('Severe Thunderstorm Warning', 'Severe', 'Immediate'), freeze: L('Freeze Warning', 'Severe', 'Expected'), winter: L('Winter Storm Warning', 'Severe', 'Expected'), torWatch: L('Tornado Watch', 'Extreme', 'Future'), frost: L('Frost Advisory', 'Minor', 'Expected'), sps: L('Special Weather Statement', 'Moderate', 'Expected') };
+  });
+  check('alerts graded like phone emergency alerts: tornado, flash flood, hurricane, snow squall, destructive storms "act now"; other storms, freeze, watches a heads-up',
+    [lv.tor, lv.ffw, lv.hur, lv.squall, lv.svrDestructive].every((x) => x === 2) && [lv.svr, lv.freeze, lv.winter, lv.torWatch, lv.frost, lv.sps].every((x) => x === 1), JSON.stringify(lv));
   await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
   await page.waitForTimeout(2500);
   const now = await page.evaluate(() => ({

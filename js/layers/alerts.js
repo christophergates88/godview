@@ -38,7 +38,7 @@ export default {
 
   // For the briefing: alerts with their outer rings (point-in-area checks).
   items() {
-    return [...alerts.entries()].map(([key, a]) => ({ key, title: a.event, severity: a.severity, rings: a._rings || [], areaDesc: a.areaDesc }));
+    return [...alerts.entries()].map(([key, a]) => ({ key, title: a.event, severity: a.severity, threat: String((a.parameters?.thunderstormDamageThreat || [])[0] || ''), rings: a._rings || [], areaDesc: a.areaDesc }));
   },
 
   render(ctx, data) {

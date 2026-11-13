@@ -11,6 +11,8 @@ import { distKm, inRing } from './layers/lib/geo.js';
 import * as watch from './watch.js';
 import { inferFromManager } from './infer.js';
 import { alertLevel } from './lookout/feeds.js';
+import { getPlace, onPlace } from './lookout/place.js';
+import { placeName } from './lookout/links.js';
 
 const $ = (id) => document.getElementById(id);
 const WMO = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'cloudy', 45: 'fog', 48: 'fog', 51: 'drizzle', 53: 'drizzle', 55: 'drizzle', 61: 'light rain', 63: 'rain', 65: 'heavy rain', 71: 'light snow', 73: 'snow', 75: 'heavy snow', 80: 'showers', 81: 'showers', 82: 'heavy showers', 95: 'thunderstorms', 96: 'storms with hail', 99: 'storms with hail' };
@@ -29,6 +31,7 @@ export function initStatus({ manager, layers, open }) {
   document.getElementById('globe').addEventListener('pointerdown', () => collapse(), { passive: true });
   let t = null;
   M.onStatus((id) => { if (id === 'tick') return; clearTimeout(t); t = setTimeout(update, 2500); });
+  onPlace(() => { clearTimeout(t); t = setTimeout(update, 600); });
   setTimeout(update, 1500);
   setInterval(update, 5 * 60000);
 }
@@ -42,6 +45,9 @@ function expand() {
 }
 
 async function pickPoint() {
+  // 0) the place every other tab uses (your location if allowed, a place you picked, your Watch place)
+  const lp = getPlace();
+  if (lp && Number.isFinite(lp.lat) && Number.isFinite(lp.lon)) return { lat: lp.lat, lon: lp.lon, label: lp.source === 'gps' ? 'Here' : placeName(lp) };
   // 1) your location, but only if permission was already given (never prompts here)
   try {
     const p = navigator.permissions && await navigator.permissions.query({ name: 'geolocation' });
@@ -74,8 +80,8 @@ export async function computeStatus(pt) {
   }
   // Weather alerts loaded in the app that cover the point
   if (!headline) {
-    // Graded by NWS severity: a tornado or severe thunderstorm warning is "act now", a freeze warning a heads-up.
-    const lv = (a) => alertLevel({ event: a.title, severity: a.severity }) || 1;
+    // Same grading as Now and Watch: a tornado warning is "act now", a freeze or thunderstorm warning a heads-up.
+    const lv = (a) => alertLevel({ event: a.title, severity: a.severity, threat: a.threat }) || 1;
     const hits = itemsOf('alerts').filter((a) => (a.rings || []).some((r) => inRing(pt.lat, pt.lon, r))).sort((x, y) => lv(y) - lv(x));
     if (hits.length) { const l = lv(hits[0]); level = Math.max(level, l); headline = `${l === 2 ? 'Act now' : 'Heads-up'}: ${hits[0].title}`; }
   }

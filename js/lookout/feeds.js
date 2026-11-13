@@ -15,20 +15,24 @@ export const weather = (p) => remember(`wx:${key(p)}`, 10 * 60e3,
   () => getData(fillUrl(ENDPOINTS.weatherNow, { lat: p.lat.toFixed(3), lon: p.lon.toFixed(3) }), { timeoutMs: 12000 }));
 
 // National Weather Service alerts covering the point (US only), most serious first.
-// Act now (2) for extreme or severe warnings (tornado, severe thunderstorm, flash flood);
-// heads-up (1) for watches, advisories and milder warnings (freeze, frost, wind).
+// Act now (2): what the NWS itself sends to phones as emergency alerts (tornado, flash flood, extreme
+// wind, hurricane, storm surge, tsunami, snow squall, dust storm, evacuation, shelter in place, and
+// severe thunderstorms tagged "destructive"), plus anything rated Extreme. Heads-up (1): watches,
+// advisories, statements and other warnings (severe thunderstorm, freeze, winter storm, heat, wind).
+// The Watch service grades its alerts the same way, so the app and its notifications agree.
+export const ACT_NOW = /Tornado Warning|Flash Flood Warning|Extreme Wind|Hurricane Warning|Storm Surge Warning|Tsunami Warning|Snow Squall Warning|Evacuation|Shelter in Place|Fire Warning|Dust Storm Warning/i;
 export function alertLevel(a) {
+  const ev = String(a.event || '');
   const sev = String(a.severity || '').toLowerCase();
-  if (/watch/i.test(a.event)) return 1;
-  if (/extreme|severe/.test(sev)) return 2;
-  if (/warning|emergency/i.test(a.event)) return sev && sev !== 'unknown' ? 1 : 2;
-  return /advisory|statement|outlook|alert/i.test(a.event) || sev === 'moderate' ? 1 : 0;
+  if (/watch/i.test(ev)) return 1;
+  if (ACT_NOW.test(ev) || sev === 'extreme' || /destructive/i.test(a.threat || '')) return 2;
+  return /warning|emergency|advisory|statement|outlook|alert/i.test(ev) || sev === 'severe' || sev === 'moderate' ? 1 : 0;
 }
 export const alerts = (p) => remember(`al:${key(p)}`, 3 * 60e3, async () => {
   const j = await getData(fillUrl(ENDPOINTS.nwsPoint, { lat: p.lat.toFixed(4), lon: p.lon.toFixed(4) }), { timeoutMs: 12000 });
   const now = Date.now();
   return (j.features || []).map((f) => f.properties || {}).map((a) => ({
-    id: a.id || a['@id'] || a.headline, event: a.event || 'Alert', headline: a.headline || '', severity: a.severity || '', urgency: a.urgency || '',
+    id: a.id || a['@id'] || a.headline, event: a.event || 'Alert', headline: a.headline || '', severity: a.severity || '', urgency: a.urgency || '', threat: String((a.parameters?.thunderstormDamageThreat || [])[0] || ''),
     desc: a.description || '', instruction: a.instruction || '', area: a.areaDesc || '', sender: a.senderName || '',
     ends: Date.parse(a.ends || a.expires || '') || null,
   })).filter((a) => !a.ends || a.ends > now)
