@@ -196,6 +196,8 @@ PY
 
 # ---------------------------------------------------------------- 8. What to do next
 LINK="${APP}#watch=${WATCH_TOKEN}@${HOST}"
+COPIED=""
+if command -v pbcopy >/dev/null 2>&1 && printf '%s' "$LINK" | pbcopy 2>/dev/null; then COPIED=1; fi
 cat <<EOF
 
 ✔ Done. GodView Watch is running every 5 minutes.
@@ -204,10 +206,18 @@ cat <<EOF
     $NTFY_TOPIC
     (leave the server as ntfy.sh). Keep this topic private.
 
-(b) Connect GodView: open this link once on each device (iPhone and Mac):
+(b) Connect GodView, once on each device (the iPhone app keeps its own copy, apart from Safari).
+    Setup link (keep it private: it is the key to your Watch):
     $LINK
-    It saves the key on that device and removes it from the address bar.
 EOF
+if [ -n "$COPIED" ]; then
+  echo "    It is already copied. On the iPhone: GodView > bell > tap the box > Paste > Connect"
+  echo "    (Mac and iPhone on the same Apple ID with Handoff on share the clipboard)."
+else
+  echo "    Copy it, then on the iPhone: GodView > bell > paste it in the box > Connect."
+fi
+echo "    On the Mac, paste it into the browser's address bar once."
+
 printf '\nPress Return to send a test alert to your phone (or close this window).'
 if read -r _; then
   CODE=$(curl -sS -X POST -H @"$TMP/watch.h" -o "$TMP/tn.json" -w '%{http_code}' "https://$HOST/test-notify") || CODE=000
