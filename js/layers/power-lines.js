@@ -22,8 +22,8 @@ export default makeShapeLayer({
   group: 'ground',
   color: '#ffd34d',
   icon: ICONS.bolt,
-  max: 800,
-  view: { maxKm: 700, radiusKm: 90 },
+  max: 500,
+  view: { maxKm: 500, radiusKm: 60 },   // the federal server is slow: a smaller area answers in a few seconds
   attribution: 'Power lines: Homeland Infrastructure Foundation-Level Data (HIFLD), Electric Power Transmission Lines',
   fetch(ctx, q) {
     const b = bbox(q.lat, q.lon, q.radiusKm); const r = (v) => Number(v).toFixed(3);
@@ -51,5 +51,5 @@ export default makeShapeLayer({
     }
     return out;
   },
-  note: (list, raw) => (raw && raw.properties && raw.properties.exceededTransferLimit ? 'Showing the first 800 lines in view. Zoom in to see all of them.' : 'Red 500 kV and up · orange 300s · yellow 200s · blue 100s'),
+  note: (list, raw) => (raw && raw.properties && raw.properties.exceededTransferLimit ? 'Showing the first 500 lines in view. Zoom in to see all of them.' : 'Red 500 kV and up · orange 300s · yellow 200s · blue 100s'),
 });

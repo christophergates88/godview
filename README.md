@@ -290,7 +290,7 @@ was loaded from the live site first, so each one is known to answer a web page d
 | Sea | Ships, live: Baltic Sea | Fintraffic Digitraffic AIS | Finland's waters only; worldwide ship feeds do not allow web pages |
 | Sea | Wave height at sea | Open-Meteo marine | Area grid; land points left out |
 | Sea | Sea marks | OpenSeaMap tiles | Zoom in near a coast |
-| Ground | High-voltage power lines (US) | HIFLD transmission lines | Area; first 800 lines in view |
+| Ground | High-voltage power lines (US) | HIFLD transmission lines | Area (60 km); first 500 lines in view; can take several seconds |
 | Ground | Railways of the world | OpenRailwayMap tiles | Personal, low-volume use |
 | Ground | 3D terrain | Esri World Elevation | A switch: real relief instead of a smooth globe |
 | Signals | Internet disruptions by country | IODA, Georgia Tech | One signal alone is often noise; two or more is a stronger sign |

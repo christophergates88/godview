@@ -332,7 +332,7 @@ Object.assign(ENDPOINTS, {
   waves: 'https://marine-api.open-meteo.com/v1/marine?latitude={lats}&longitude={lons}&current=wave_height,wave_direction,wave_period,sea_surface_temperature',
   powerLines: 'https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/Electric_Power_Transmission_Lines/FeatureServer/0/query' +
     '?where=1%3D1&geometry={w},{s},{e},{n}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects' +
-    '&outFields=OWNER,VOLTAGE,VOLT_CLASS,TYPE,STATUS,SUB_1,SUB_2&resultRecordCount=800&maxAllowableOffset=0.002&geometryPrecision=4&f=geojson',
+    '&outFields=OWNER,VOLTAGE,VOLT_CLASS,TYPE,STATUS,SUB_1,SUB_2&resultRecordCount=500&maxAllowableOffset=0.003&geometryPrecision=4&f=geojson',
 });
 
 Object.assign(INTERVALS, {
