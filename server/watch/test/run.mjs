@@ -352,6 +352,7 @@ let afterFirst;
   const at = new Date('2026-11-13T11:15:00Z'); // 6:15 New York: morning brief time
   check('aiKind: Claude when a key is set, else Workers AI, else none', W.aiKind({ ANTHROPIC_API_KEY: 'k', AI: fakeAI(() => ({})) }) === 'claude' && W.aiKind({ AI: fakeAI(() => ({})) }) === 'workers-ai' && W.aiKind({}) === null);
   check('numbers check: only numbers already in the facts are allowed', W.numbersGrounded('61° and 30 mph', 'high 61 gusts 30') && !W.numbersGrounded('a 90% chance', 'chance 70'));
+  check('numbers check: rounding a decimal and 12-hour times are fine, new numbers are not', W.numbersGrounded('UV 5, sunset 5:42', '{"uv":5.35,"sunset":"17:42"}') && W.numbersGrounded('UV 5.4', '{"uv":5.35}') && !W.numbersGrounded('UV 9', '{"uv":5.35}') && !W.numbersGrounded('sunset 6:42', '{"sunset":"17:42"}') && !W.numbersGrounded('10 degrees warmer than normal', '{"now":61,"normal":"55-58"}'));
   // Brief worded by Workers AI
   const ai = fakeAI((input) => ({ response: `Test Home: rain today. ${JSON.parse(input.messages[1].content)[0].place.name} stays under watch.` }));
   const e = env({ AI: ai }); await seed(e);

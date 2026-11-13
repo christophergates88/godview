@@ -345,6 +345,14 @@ async function renderAlerts() {
 }
 
 // ---------------------------------------------------------------- brief
+// Why the plain (rule-based) wording was used even though AI is set up.
+export function aiWhy(err) {
+  const s = String(err || '');
+  if (/number/i.test(s)) return 'the AI version added a number that isn’t in the data, so the plain version is shown';
+  if (/alloc|neuron|quota|limit|429|capacity/i.test(s)) return 'the free daily AI allowance is used up (it resets every day)';
+  if (/empty/i.test(s)) return 'the AI sent back nothing';
+  return 'the AI didn’t answer';
+}
 async function renderBrief(fresh) {
   const box = $('w-brief');
   box.innerHTML = '<p class="muted">Loading…</p>';
@@ -354,6 +362,7 @@ async function renderBrief(fresh) {
   const lines = String(b.text || '').split('\n').filter(Boolean);
   const nv = (b.facts || []).map((f) => `<div class="nvn">${(f.history?.items || []).slice(0, 4).map((it) => `<div class="nv ${it.unusual ? 'odd' : ''}"><span>${escapeHtml(f.place.name)} · ${escapeHtml(it.label)}</span><b>${escapeHtml(String(it.now))}</b><small>normal: ${escapeHtml(it.normal)}</small></div>`).join('')}</div><p class="muted small">${escapeHtml(f.history?.note || '')}</p>`).join('');
   box.innerHTML = `<div class="brief-when">${escapeHtml(new Date(b.at).toLocaleString(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' }))}${b.by && b.by !== 'rules' ? ` · worded by ${/claude/i.test(b.by) ? 'Claude' : 'AI'}` : ''}</div>
+    ${b.by === 'rules' && b.aiError ? `<p class="muted small" id="wb-why">Plain wording this time: ${escapeHtml(aiWhy(b.aiError))}.</p>` : ''}
     <div class="brief-text">${lines.map((l) => l.startsWith('Do:') ? `<p class="do">${escapeHtml(l.slice(3).trim())}</p>` : `<p>${escapeHtml(l)}</p>`).join('')}</div>
     ${nv}
     <button class="btn" id="wb-now">Brief me now</button>`;

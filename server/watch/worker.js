@@ -14,7 +14,7 @@
 //
 // Privacy: places (names/coordinates) live only in KV, never in source code.
 
-export const VERSION = '3.1.0';
+export const VERSION = '3.1.1';
 const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 const APP_URL = 'https://christophergates88.github.io/godview/';
 const UA = 'GodView-Watch/3.0 (personal weather and hazard watcher; https://christophergates88.github.io/godview/)';
@@ -1100,8 +1100,17 @@ export function briefText(facts) {
 const BRIEF_SYSTEM = 'You write a short morning brief for one person about his saved places. Use ONLY the facts in the JSON the user sends. Do not add any fact, number, place, forecast or advice that is not in it. Plain words, short sentences, no greetings, no markdown headings. One short paragraph per place, then at most three lines starting with "Do:" taken from the todo lists. If history is short, do not call anything unusual.';
 // Safety net for the smaller model: every number it writes must already be in
 // the facts or in the rule-based text; otherwise the rule-based text is used.
+// Rounding a decimal (UV 5.35 -> 5) and writing a 24-hour time as a 12-hour
+// time (17:42 -> 5:42) are allowed; any other new number is not.
 export function numbersGrounded(text, ...sources) {
-  const have = new Set(sources.join(' ').match(/\d+(?:\.\d+)?/g) || []);
+  const src = sources.join(' ');
+  const have = new Set();
+  for (const n of src.match(/\d+(?:\.\d+)?/g) || []) {
+    const v = Number(n);
+    have.add(n); have.add(String(v));
+    if (!Number.isInteger(v)) for (const r of [Math.round(v), Math.floor(v), Math.ceil(v), Number(v.toFixed(1)), Math.round(v * 10) / 10]) have.add(String(r));
+  }
+  for (const m of src.matchAll(/\b(\d{1,2}):\d{2}\b/g)) { const h = Number(m[1]); if (h <= 23) have.add(String(h % 12 || 12)); }
   return (String(text).match(/\d+(?:\.\d+)?/g) || []).every((n) => have.has(n) || have.has(String(Number(n))));
 }
 export async function claudeWording(ctx, facts, fallback) {

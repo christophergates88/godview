@@ -381,6 +381,18 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   const brief = await page.evaluate(() => document.getElementById('w-brief').innerText);
   check('Brief tab: "Brief me now" shows the brief with do-lines and history', /Test Home/.test(brief) && /history|No history/.test(brief), brief.replace(/\s+/g, ' ').slice(0, 200));
   await page.screenshot({ path: path.join(outDir, 'watch-brief.png') });
+  // AI wording that adds a number is replaced by the plain version, and the app says why
+  watchEnv.AI = { run: async () => ({ response: 'Test Home: a 97% chance of a tornado.' }) };
+  await page.click('#wb-now');
+  await page.waitForTimeout(1500);
+  const why = await page.evaluate(() => ({ why: document.getElementById('wb-why')?.innerText || '', head: document.querySelector('#w-brief .brief-when')?.innerText || '', text: document.getElementById('w-brief').innerText }));
+  check('Brief: AI text with a made-up number is dropped and the reason is shown', /isn’t in the data/.test(why.why) && !/worded by/.test(why.head) && !/97%/.test(why.text), JSON.stringify(why).slice(0, 240));
+  watchEnv.AI = { run: async () => ({ response: 'Test Home: a quiet day.\nDo: nothing needed.' }) };
+  await page.click('#wb-now');
+  await page.waitForTimeout(1500);
+  const head2 = await page.evaluate(() => ({ head: document.querySelector('#w-brief .brief-when')?.innerText || '', why: !!document.getElementById('wb-why') }));
+  check('Brief: AI text with only known facts shows "worded by AI"', /worded by AI/i.test(head2.head) && !head2.why, JSON.stringify(head2));
+  delete watchEnv.AI;
   await page.click('#watch-close');
   // watchSelfTest and What's here with the server check
   const wst = await page.evaluate(() => window.GodView.watchSelfTest());
