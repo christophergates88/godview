@@ -1,5 +1,5 @@
 // "News": local headlines for your place. Google News (through the data relay,
-// because it does not let web pages read it directly); GDELT as a backup.
+// because it does not let web pages read it directly); Bing News, then GDELT, as backups.
 
 import { $, h, row, section, getData, remember, fillUrl, ago } from './common.js';
 import { getPlace, onPlace } from './place.js';
@@ -25,6 +25,26 @@ export function parseRss(xml) {
   }).filter((x) => x.title && /^https?:\/\//.test(x.url));
 }
 
+// Google turns the relay away now and then ("unusual traffic"), sometimes for a long while, and answers slowly when
+// it does. After a turn-away, go straight to Bing for a while instead of making every screen wait on Google again.
+let googleOffUntil = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Bing ranks by relevance and mixes in old stories: ask for the county and the town, keep the recent ones.
+async function bingList(p, town, stateName, which) {
+  const qs = [...new Set([p.county ? `${p.county} ${stateName}` : '', `${town} ${stateName}`].filter(Boolean))];
+  const parts = await Promise.allSettled(qs.map((x) => getData(fillUrl(ENDPOINTS.bingNews, { q: x }), { type: 'text', timeoutMs: 12000 }).then(parseRss)));
+  if (parts.every((r) => r.status === 'rejected')) throw parts[0].reason;
+  const since = Date.now() - (which === 'hour' ? 3600e3 : 30 * 86400e3);
+  const seen = new Set();
+  return parts.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])).filter((a) => {
+    const k = a.title.toLowerCase().slice(0, 60);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return a.t >= since;
+  }).sort((a, b) => b.t - a.t);
+}
+
 async function headlines(p, which) {
   const place = placeName(p);
   const stateName = STATES[p.state] || p.stateName || '';
@@ -33,38 +53,30 @@ async function headlines(p, which) {
   const where = p.county && p.county !== town ? `("${town}" OR "${p.county}")` : `"${town}"`;
   const q = `${where} ${stateName} when:${which === 'hour' ? '1h' : '7d'}`;
   return remember(`news:${which}:${place}`, 10 * 60e3, async () => {
-    // Google sometimes turns the relay away for a moment ("unusual traffic"): one retry, then Bing.
-    const google = () => getData(fillUrl(ENDPOINTS.googleNews, { q }), { type: 'text', timeoutMs: 12000 });
-    try {
-      let xml;
-      try { xml = await google(); } catch { await new Promise((r) => setTimeout(r, 1200)); xml = await google(); }
-      const list = parseRss(xml);
-      return { list: list.sort((a, b) => b.t - a.t), via: 'Google News' };
-    } catch { /* try Bing */ }
-    try {
-      // Bing ranks by relevance and mixes in old stories: ask for the county and the town, keep the recent ones.
-      const qs = [...new Set([p.county ? `${p.county} ${stateName}` : '', `${town} ${stateName}`].filter(Boolean))];
-      const parts = await Promise.allSettled(qs.map((x) => getData(fillUrl(ENDPOINTS.bingNews, { q: x }), { type: 'text', timeoutMs: 12000 }).then(parseRss)));
-      if (parts.every((r) => r.status === 'rejected')) throw parts[0].reason;
-      const since = Date.now() - (which === 'hour' ? 3600e3 : 30 * 86400e3);
-      const seen = new Set();
-      const list = parts.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])).filter((a) => {
-        const k = a.title.toLowerCase().slice(0, 60);
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return a.t >= since;
-      });
-      return { list: list.sort((a, b) => b.t - a.t), via: 'Bing News' };
-    } catch (e) {
-      if (which === 'hour') throw e;
-      // Backup: GDELT's article search (last 3 days)
-      const gq = `"${p.city || p.name}"${stateName ? ` "${stateName}"` : ''} sourcecountry:US sourcelang:english`;
-      const j = await getData(fillUrl(ENDPOINTS.gdeltNews, { q: gq }), { timeoutMs: 20000 });
-      const seen = new Set();
-      const list = (j.articles || []).filter((a) => { const k = String(a.title || '').toLowerCase().slice(0, 60); if (!k || seen.has(k)) return false; seen.add(k); return true; })
-        .map((a) => { const s = a.seendate || ''; return { title: a.title, source: a.domain || '', url: a.url, t: s ? Date.parse(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(9, 11)}:${s.slice(11, 13)}:00Z`) : 0 }; });
-      return { list, via: 'GDELT' };
-    }
+    // Google first; Bing is asked as soon as Google fails or is slow (2.5 s), and used if Google has not answered by 4 s.
+    const tryGoogle = Date.now() >= googleOffUntil;
+    let gotGoogle = false;
+    const g = tryGoogle
+      ? getData(fillUrl(ENDPOINTS.googleNews, { q }), { type: 'text', timeoutMs: 12000 }).then((xml) => { gotGoogle = true; return parseRss(xml).sort((a, b) => b.t - a.t); })
+      : Promise.reject(new Error('Google News is turning the relay away'));
+    g.catch(() => { if (tryGoogle) googleOffUntil = Date.now() + 15 * 60e3; });
+    const b = Promise.race([g.catch(() => null), sleep(2500)]).then(() => (gotGoogle ? null : bingList(p, town, stateName, which)));
+    b.catch(() => {});
+    const first = await Promise.race([g.then((list) => ({ list }), () => ({ failed: true })), sleep(4000).then(() => ({ late: true }))]);
+    if (first.list) return { list: first.list, via: 'Google News' };
+    let bl = null;
+    try { bl = await b; } catch { /* Bing did not answer either */ }
+    if (bl && (bl.length || first.failed)) return { list: bl, via: 'Bing News' };
+    if (first.late) { try { return { list: await g, via: 'Google News' }; } catch { /* */ } }
+    if (bl) return { list: bl, via: 'Bing News' };
+    if (which === 'hour') throw new Error('the news services did not answer');
+    // Last resort: GDELT's article search (last 3 days)
+    const gq = `"${town}"${stateName ? ` "${stateName}"` : ''} sourcecountry:US sourcelang:english`;
+    const j = await getData(fillUrl(ENDPOINTS.gdeltNews, { q: gq }), { timeoutMs: 20000 });
+    const seen = new Set();
+    const list = (j.articles || []).filter((a) => { const k = String(a.title || '').toLowerCase().slice(0, 60); if (!k || seen.has(k)) return false; seen.add(k); return true; })
+      .map((a) => { const s = a.seendate || ''; return { title: a.title, source: a.domain || '', url: a.url, t: s ? Date.parse(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(9, 11)}:${s.slice(11, 13)}:00Z`) : 0 }; });
+    return { list, via: 'GDELT' };
   });
 }
 

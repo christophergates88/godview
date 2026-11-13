@@ -904,17 +904,24 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
 
   // A ?tab= link opens that tab (the old Lookout address forwards to ?tab=now)
   const c2 = await browser.newContext(iphone);
-  await setupRoutes(c2, { lookout: { openTo: 'map', place }, googleNewsDown: true });
+  const counts2 = await setupRoutes(c2, { lookout: { openTo: 'map', place }, googleNewsDown: true });
   const p2 = await c2.newPage();
   await p2.goto(BASE + '?tab=cams', { waitUntil: 'load' });
   await p2.waitForTimeout(1500);
   const t2 = await p2.evaluate(() => ({ cams: !document.getElementById('lk-cams').hidden, current: document.querySelector('#tabbar [aria-current="page"]')?.dataset.tab }));
   check('?tab=cams opens the Cams tab', t2.cams && t2.current === 'cams', JSON.stringify(t2));
-  // Google News turns the relay away: one retry, then Bing News
+  // Google News turns the relay away: Bing News right away, and Google is left alone for a while after that
+  const tn = Date.now();
   await p2.click('#tabbar [data-tab="news"]');
   await p2.waitForFunction(() => document.querySelectorAll('#nw-list .story').length > 0, null, { timeout: 20000 }).catch(() => {});
   const bn = await p2.evaluate(() => ({ first: document.querySelector('#nw-list .story b')?.textContent, src: document.querySelector('#nw-list .story small')?.textContent, via: document.getElementById('nw-list')?.innerText || '' }));
-  check('News: when Google turns the relay away, Bing News fills in (source shown)', bn.first === 'Bing sample: county fair opens' && /Sample Paper/.test(bn.src || '') && /Bing News/.test(bn.via), JSON.stringify(bn).slice(0, 200));
+  bn.ms = Date.now() - tn;
+  check('News: when Google turns the relay away, Bing News fills in at once (source shown)', bn.first === 'Bing sample: county fair opens' && /Sample Paper/.test(bn.src || '') && /Bing News/.test(bn.via) && bn.ms < 4000, JSON.stringify(bn).slice(0, 220));
+  const asked = counts2['relay:news.google.com'] || 0;
+  await p2.click('#lk-news [data-s="hour"]');
+  await p2.waitForFunction(() => /Nothing new in the last hour|story/.test(document.getElementById('nw-list')?.innerHTML || ''), null, { timeout: 8000 }).catch(() => {});
+  const hr = await p2.evaluate(() => document.getElementById('nw-list')?.innerText || '');
+  check('News: after a turn-away, "Last hour" goes straight to Bing (Google not asked again)', (counts2['relay:news.google.com'] || 0) === asked && asked >= 1 && /Nothing new in the last hour/.test(hr), `google asks ${asked} -> ${counts2['relay:news.google.com']} | ${hr.slice(0, 60)}`);
   await c2.close();
 }
 
