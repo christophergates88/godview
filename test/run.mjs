@@ -930,6 +930,13 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await p2.waitForFunction(() => /Nothing new in the last hour|story/.test(document.getElementById('nw-list')?.innerHTML || ''), null, { timeout: 8000 }).catch(() => {});
   const hr = await p2.evaluate(() => document.getElementById('nw-list')?.innerText || '');
   check('News: after a turn-away, "Last hour" goes straight to Bing (Google not asked again)', (counts2['relay:news.google.com'] || 0) === asked && asked >= 1 && /Nothing new in the last hour/.test(hr), `google asks ${asked} -> ${counts2['relay:news.google.com']} | ${hr.slice(0, 60)}`);
+  // The map pill tells the same story as Now about alerts, even with the map's alerts layer switched off
+  await p2.click('#tabbar [data-tab="map"]');
+  await p2.waitForFunction(() => window.GodView && window.GodView.manager && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await p2.evaluate(() => window.GodView.manager.enable('alerts', false));
+  await p2.waitForFunction(() => /Severe Thunderstorm Warning/.test(document.querySelector('#status .s-head')?.textContent || ''), null, { timeout: 20000 }).catch(() => {});
+  const pillHead = await p2.evaluate(() => ({ head: document.querySelector('#status .s-head')?.textContent || '', alertsOn: window.GodView.manager.state.alerts.enabled }));
+  check('map pill: same alert as Now, even with the alerts layer off', pillHead.head === 'Heads-up: Severe Thunderstorm Warning' && pillHead.alertsOn === false, JSON.stringify(pillHead));
   await c2.close();
 }
 

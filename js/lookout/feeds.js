@@ -28,6 +28,11 @@ export function alertLevel(a) {
   if (ACT_NOW.test(ev) || sev === 'extreme' || /destructive/i.test(a.threat || '')) return 2;
   return /warning|emergency|advisory|statement|outlook|alert/i.test(ev) || sev === 'severe' || sev === 'moderate' ? 1 : 0;
 }
+// Within a level: more severe first, then what is happening now, then warnings before watches before advisories
+// (a freeze warning comes before a frost advisory).
+const RANK = { extreme: 4, severe: 3, moderate: 2, minor: 1, immediate: 3, expected: 2, future: 1 };
+const alertRank = (a) => (RANK[String(a.severity).toLowerCase()] || 0) * 100 + (RANK[String(a.urgency).toLowerCase()] || 0) * 10
+  + (/warning|emergency/i.test(a.event) ? 3 : /watch/i.test(a.event) ? 2 : /advisory/i.test(a.event) ? 1 : 0);
 export const alerts = (p) => remember(`al:${key(p)}`, 3 * 60e3, async () => {
   const j = await getData(fillUrl(ENDPOINTS.nwsPoint, { lat: p.lat.toFixed(4), lon: p.lon.toFixed(4) }), { timeoutMs: 12000 });
   const now = Date.now();
@@ -37,7 +42,7 @@ export const alerts = (p) => remember(`al:${key(p)}`, 3 * 60e3, async () => {
     ends: Date.parse(a.ends || a.expires || '') || null,
   })).filter((a) => !a.ends || a.ends > now)
     .map((a) => ({ ...a, level: alertLevel(a) }))
-    .sort((x, y) => y.level - x.level);
+    .sort((x, y) => y.level - x.level || alertRank(y) - alertRank(x));
 });
 
 // Georgia 511 (the copy rebuilt by the Lookout repo's feed job; no key)

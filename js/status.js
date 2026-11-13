@@ -10,7 +10,7 @@ import { fmt, escapeHtml } from './core/units.js';
 import { distKm, inRing } from './layers/lib/geo.js';
 import * as watch from './watch.js';
 import { inferFromManager } from './infer.js';
-import { alertLevel } from './lookout/feeds.js';
+import { alertLevel, alerts as pointAlerts } from './lookout/feeds.js';
 import { getPlace, onPlace } from './lookout/place.js';
 import { placeName } from './lookout/links.js';
 
@@ -78,12 +78,19 @@ export async function computeStatus(pt) {
     level = top.sev === 'act now' ? 2 : top.sev === 'heads-up' ? 1 : 0;
     if (level) headline = `${level === 2 ? 'Act now' : 'Heads-up'}: ${top.title}`;
   }
-  // Weather alerts loaded in the app that cover the point
+  // Weather alerts for the point: the same NWS check the Now tab makes (so the two always agree, even with the
+  // alerts layer off), or, outside the US / if that check fails, the alerts loaded on the map that cover the point.
+  // Graded as on Now and in Watch: a tornado warning is "act now", a freeze or thunderstorm warning a heads-up.
   if (!headline) {
-    // Same grading as Now and Watch: a tornado warning is "act now", a freeze or thunderstorm warning a heads-up.
-    const lv = (a) => alertLevel({ event: a.title, severity: a.severity, threat: a.threat }) || 1;
-    const hits = itemsOf('alerts').filter((a) => (a.rings || []).some((r) => inRing(pt.lat, pt.lon, r))).sort((x, y) => lv(y) - lv(x));
-    if (hits.length) { const l = lv(hits[0]); level = Math.max(level, l); headline = `${l === 2 ? 'Act now' : 'Heads-up'}: ${hits[0].title}`; }
+    let top = null;
+    try {
+      top = (await pointAlerts(pt)).find((a) => a.level > 0) || null;
+    } catch {
+      const lv = (a) => alertLevel({ event: a.title, severity: a.severity, threat: a.threat }) || 1;
+      const hits = itemsOf('alerts').filter((a) => (a.rings || []).some((r) => inRing(pt.lat, pt.lon, r))).sort((x, y) => lv(y) - lv(x));
+      if (hits.length) top = { event: hits[0].title, level: lv(hits[0]) };
+    }
+    if (top) { level = Math.max(level, top.level); headline = `${top.level === 2 ? 'Act now' : 'Heads-up'}: ${top.event}`; }
   }
   if (!headline) headline = pt.label === 'Here' ? 'All clear here' : `All clear near ${pt.label}`;
   // An inference nearby (medium or high confidence), clearly marked
