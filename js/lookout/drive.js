@@ -14,6 +14,7 @@ import { alerts as nwsAlerts, roadEvents, eventTitle, eventWord, eventSev, WMO }
 import { ENDPOINTS } from '../config.js';
 import { fmt } from '../core/units.js';
 import { startScan, stopScan, scanState } from './animalscan.js';
+import { crumb } from '../core/crashlog.js';
 
 const PREF_KEY = 'godview.drive.v1';
 const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; } })();
@@ -36,6 +37,7 @@ const ICO = {
 
 // ---------------------------------------------------------------- open / close
 export async function openDrive() {
+  crumb('drive: open');
   unlockAudio();           // must happen inside the tap that opened Drive mode (iPhone rule)
   const box = $('drive');
   if (!built) build(box);
@@ -51,6 +53,7 @@ export async function openDrive() {
 }
 
 export function closeDrive() {
+  crumb('drive: close');
   $('drive').hidden = true;
   S.open = false;
   clearInterval(clockTimer);
@@ -359,6 +362,7 @@ function paintScan() {
 
 // ---------------------------------------------------------------- animal scan
 async function toggleScan(on) {
+  crumb(on ? 'scan: start' : 'scan: stop');
   prefs.scan = on; savePrefs();
   if (!on) { stopScan(); paintScan(); return; }
   paintScan();
@@ -374,6 +378,7 @@ async function toggleScan(on) {
     }
   });
   if (!ok) { prefs.scan = false; savePrefs(); }   // don't keep retrying a blocked camera on every open
+  else crumb(`scan: running (${scanState().backend || 'detector'})`);
   paintScan();
 }
 

@@ -1,6 +1,7 @@
 // Start-up: apply the theme, load the globe library from the CDN, then start the app.
 
 import { LIBS, THEME } from './config.js';
+import { initCrashLog } from './core/crashlog.js';
 
 // THEME (config.js) -> CSS variables, e.g. accent -> --gv-accent
 const root = document.documentElement;
@@ -34,6 +35,8 @@ function loadScript(src) {
 }
 
 async function start() {
+  // Notes whether the last session ended normally (an iPhone stops a page that uses too much memory).
+  try { initCrashLog(); } catch { /* storage blocked */ }
   // Lookout's screens (Now, Cams, Scanner, News) need no globe: show them first.
   try { (await import('./lookout/shell.js')).initShell(); } catch (e) { console.error('Lookout screens', e); }
   try {

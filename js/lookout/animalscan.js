@@ -26,6 +26,7 @@ let hits = []; let lastAlarm = 0; let lastEyes = 0; let frames = 0; let fpsT = 0
 const tracker = new EyeTracker(3, 4);
 
 export const scanState = () => ({ ...state, boxes: state.boxes.slice() });
+export const detectorLoaded = () => !!detector;
 const set = (patch) => { Object.assign(state, patch); onEvent({ type: 'state', state: scanState() }); };
 
 // ---------------------------------------------------------------- detector
@@ -40,7 +41,20 @@ async function cachedResponse(url) {
   if (cache) { try { await cache.put(url, res.clone()); } catch { /* storage full: still works this time */ } }
   return res;
 }
-const blobUrl = async (url, type) => URL.createObjectURL(new Blob([await (await cachedResponse(url)).arrayBuffer()], { type }));
+const blobUrls = [];
+const blobUrl = async (url, type) => { const u = URL.createObjectURL(new Blob([await (await cachedResponse(url)).arrayBuffer()], { type })); blobUrls.push(u); return u; };
+const dropBlobs = () => { while (blobUrls.length) { try { URL.revokeObjectURL(blobUrls.pop()); } catch { /* */ } } };
+
+// The detector holds a lot of memory (its own graphics context, the model, a large
+// WebAssembly heap). On an iPhone that plus the globe can be more than the app is
+// allowed, so it is freed whenever the scan stops and rebuilt from the saved files next time.
+export function releaseDetector() {
+  const d = detector;
+  detector = null; loading = null;
+  if (d && d !== window.GV_TEST_DETECTOR) { try { d.close(); } catch { /* already gone */ } }
+  dropBlobs();
+  work = null; wctx = null; tiny = null; tctx = null;
+}
 
 async function loadDetector() {
   if (window.GV_TEST_DETECTOR) { detectorKind = 'test'; return window.GV_TEST_DETECTOR; }
@@ -67,6 +81,8 @@ async function loadDetector() {
     const d = await lib.ObjectDetector.createFromOptions(fileset, opts(model, 'CPU'));
     detectorKind = 'EfficientDet-Lite0 (CPU)';
     return d;
+  } finally {
+    setTimeout(dropBlobs, 0);   // the detector has its own copy now
   }
 }
 
@@ -80,6 +96,10 @@ export async function detectPicture(source) {
   const r = detector.detectForVideo(c, performance.now() + Math.random());
   const all = (r.detections || []).map((d) => ({ label: d.categories?.[0]?.categoryName || '', score: Math.round((d.categories?.[0]?.score || 0) * 100) / 100, h: Math.round(((d.boundingBox?.height || 0) / c.height) * 100) / 100 }));
   return { model: detectorKind, all, alarm: all.some((d) => LARGE_ANIMALS.has(d.label) && d.score >= MIN_SCORE) };
+}
+// After checking pictures, free the detector (unless a scan is running).
+export function doneWithPictures() {
+  if (!state.on) releaseDetector();
 }
 
 // ---------------------------------------------------------------- picture tools
@@ -126,7 +146,16 @@ export async function startScan(box, handler) {
   if (!state.on) return false;
   set({ phase: 'model', message: detector ? 'Starting the detector…' : 'Getting the animal detector ready (first time: about 25 MB, then it works offline)…' });
   try {
-    if (!detector) { loading = loading || loadDetector(); detector = await loading; }
+    if (!detector) {
+      const p = loading || (loading = loadDetector());
+      const d = await p;
+      if (!state.on || loading !== p) {            // stopped (or restarted) while it was loading: don't keep it
+        if (loading === p) loading = null;
+        if (d !== window.GV_TEST_DETECTOR) { try { d.close(); } catch { /* */ } }
+        return false;
+      }
+      detector = d;
+    }
   } catch (e) {
     loading = null;
     set({ phase: 'error', message: `The animal detector could not load (${e.message || e}). Try again on Wi-Fi; after one good download it works without signal.`, error: 'model' });
@@ -160,6 +189,7 @@ export function stopScan(keepMessage = false) {
   if (video) { try { video.srcObject = null; } catch { /* */ } }
   video = null; overlay = null; ovx = null;
   state.on = false;
+  releaseDetector();
   if (!keepMessage) set({ phase: 'off', message: '', boxes: [], eyes: null, fps: 0 });
   else onEvent({ type: 'state', state: scanState() });
 }

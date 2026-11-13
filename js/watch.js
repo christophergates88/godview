@@ -2,6 +2,7 @@
 // Talks to the godview-watch Cloudflare Worker. If it is not set up, the map
 // keeps working and this screen says exactly what to do.
 
+import { crumb } from './core/crashlog.js';
 import { ENDPOINTS } from './config.js';
 import { fetchJSON, fillUrl } from './core/net.js';
 import { escapeHtml, fmt } from './core/units.js';
@@ -110,6 +111,7 @@ async function pollBadge() {
 
 function open(which) {
   tab = which || tab;
+  crumb(`watch: ${tab}`);
   $('watch').hidden = false;
   for (const b of document.querySelectorAll('#watch-tabs button')) b.classList.toggle('on', b.dataset.tab === tab);
   render();

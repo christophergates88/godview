@@ -9,6 +9,7 @@ import { buildReport, canonical, sha256Hex } from '../server/watch/worker.js';
 import { REPORT_SOURCES } from './config.js';
 import { relayUrl, relayMode } from './core/net.js';
 import { escapeHtml } from './core/units.js';
+import { crumb } from './core/crashlog.js';
 
 const $ = (id) => document.getElementById(id);
 let preset = null; // { lat, lon, name } from What's here
@@ -78,9 +79,12 @@ export function renderReportsTab(box, { connected, api, places, toast }) {
     if (sel === 'preset' && preset) pt = preset;
     else if (sel.startsWith('place:')) pt = (places || []).find((p) => p.id === sel.slice(6));
     else { const v = window.GodView.globe.getView(); pt = { lat: v.lat, lon: v.lon, name: 'Map centre' }; }
-    const start = new Date($('rp-start').value).toISOString();
-    const end = new Date($('rp-end').value).toISOString();
+    const s0 = new Date($('rp-start').value); const e0 = new Date($('rp-end').value);
+    if (!Number.isFinite(s0.getTime()) || !Number.isFinite(e0.getTime()) || e0 <= s0) { $('rp-status').textContent = 'Pick a start and an end time (the end after the start).'; return; }
+    const start = s0.toISOString();
+    const end = e0.toISOString();
     $('rp-status').textContent = 'Gathering records…';
+    crumb(`report: making (${connected ? 'Watch' : 'here'})`);
     try {
       let out;
       if (connected) {
@@ -110,6 +114,7 @@ const KIND = { official: 'Official', reported: 'Reported', measured: 'Measured',
 const SECTIONS = [['warnings', 'Warnings in effect at this point'], ['reports', 'Storm reports nearby'], ['rain', 'Rainfall'], ['quakes', 'Earthquakes within 300 km'], ['fires', 'Wildfires'], ['rivers', 'Rivers']];
 
 export async function openReport(out) {
+  crumb('report: shown');
   const { report } = out;
   const recheck = await sha256Hex(canonical(report));
   const ok = recheck === out.sha256;
@@ -155,12 +160,19 @@ export async function openReport(out) {
   document.body.classList.add('report-open');
   $('rp-close').addEventListener('click', () => { el.hidden = true; document.body.classList.remove('report-open'); });
   $('rp-print').addEventListener('click', () => window.print());
-  $('rp-json').addEventListener('click', () => {
-    const blob = new Blob([out.json], { type: 'application/json' });
+  $('rp-json').addEventListener('click', async () => {
+    const name = `conditions-report-${out.sha256.slice(0, 12)}.json`;
+    // On a phone (and in the GodView app) hand the file to the share sheet (Save to Files, Mail...);
+    // opening it as a download there would replace GodView with the raw file.
+    try {
+      const file = new File([out.json], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Conditions report (data)' }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `conditions-report-${out.sha256.slice(0, 12)}.json`;
+    a.href = URL.createObjectURL(new Blob([out.json], { type: 'application/json' }));
+    a.download = name;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   });
   $('rp-share').addEventListener('click', async () => {
     const text = `Conditions report: ${report.subject.name}, ${t(report.window.start)} to ${t(report.window.end)}. Warnings: ${s.warnings}; largest hail reported: ${s.maxReportedHailIn || 'none'}; strongest wind reported: ${s.maxReportedWindMph || 'none'}. SHA-256 ${out.sha256}`;

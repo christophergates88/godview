@@ -1055,8 +1055,8 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.evaluate(() => { window.__tracks = document.querySelector('#dv-cam video').srcObject.getTracks(); });
   await page.click('#dv-scan');
   await page.waitForTimeout(300);
-  const s4 = await page.evaluate(() => ({ on: GodViewDrive.state().scan.on, hidden: document.getElementById('dv-cam').hidden, ended: window.__tracks.every((t) => t.readyState === 'ended') }));
-  check('animal scan: Stop turns the camera off', !s4.on && s4.hidden && s4.ended, JSON.stringify(s4));
+  const s4 = await page.evaluate(async () => ({ on: GodViewDrive.state().scan.on, hidden: document.getElementById('dv-cam').hidden, ended: window.__tracks.every((t) => t.readyState === 'ended'), detector: (await import('./js/lookout/animalscan.js')).detectorLoaded() }));
+  check('animal scan: Stop turns the camera off and frees the detector (memory back for the globe)', !s4.on && s4.hidden && s4.ended && s4.detector === false, JSON.stringify(s4));
   await page.evaluate(() => { navigator.mediaDevices.getUserMedia = () => Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' })); });
   await page.click('#dv-scan');
   await page.waitForTimeout(400);
@@ -1067,6 +1067,53 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   check('drive: Done closes it', closed);
   const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource|play\(\) request|NotAllowedError|NotSupportedError/.test(e));
   check('[v8] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
+  await context.close();
+}
+
+
+// ------------------------------------------------------------ scenario 11 (v8.1): no drawing under covering screens; crash notes
+{
+  const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true };
+  const context = await browser.newContext(iphone);
+  await setupRoutes(context, { lookout: { openTo: 'map' } });
+  // The last session was stopped while making a report (as iOS does when a page uses too much memory)
+  await context.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    const t = Date.now() - 60000;
+    localStorage.setItem('godview.alive.v1', JSON.stringify({ t }));
+    localStorage.setItem('godview.trail.v1', JSON.stringify([{ t, what: 'tab map' }, { t, what: "map: what's here" }, { t, what: 'report: making (Watch)' }]));
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(BASE + '?tab=map', { waitUntil: 'load' });
+  await page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await page.waitForFunction(() => /stopped unexpectedly/.test(document.getElementById('toast')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+  const note = await page.evaluate(() => ({ toast: document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent, loop: window.GodView.viewer.useDefaultRenderLoop }));
+  check('crash notes: after an unexpected stop, GodView says so once on start', /restarted after being stopped unexpectedly/.test(note.toast), JSON.stringify(note));
+  check('map tab: the globe draws when nothing covers it', note.loop === true, String(note.loop));
+  await page.click('#btn-settings');
+  await page.waitForTimeout(300);
+  const set = await page.evaluate(() => ({ loop: window.GodView.viewer.useDefaultRenderLoop, about: document.getElementById('set-lastproblem')?.textContent || '' }));
+  check('crash notes: Settings › About shows when it happened and the last steps', /stopped unexpectedly: .* last steps: tab map → map: what's here → report: making \(Watch\)/.test(set.about), set.about);
+  check('the globe stops drawing while Settings covers it (phone)', set.loop === false, String(set.loop));
+  await page.click('#settings-close');
+  await page.waitForTimeout(300);
+  const back = await page.evaluate(() => window.GodView.viewer.useDefaultRenderLoop);
+  await page.evaluate(() => { document.getElementById('report').hidden = false; });
+  await page.waitForTimeout(200);
+  const rep = await page.evaluate(() => window.GodView.viewer.useDefaultRenderLoop);
+  await page.evaluate(() => { document.getElementById('report').hidden = true; });
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => window.GodView.viewer.useDefaultRenderLoop);
+  check('the globe stops drawing under a full-screen report and starts again after', back === true && rep === false && after === true, `${back} ${rep} ${after}`);
+  // A normal close (app to the background) is not a problem
+  const cleared = await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); return localStorage.getItem('godview.alive.v1'); });
+  check('crash notes: going to the background counts as a normal close', cleared === null, String(cleared));
+  const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource|play\(\) request|NotAllowedError|NotSupportedError/.test(e));
+  check('[v8.1] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
   await context.close();
 }
 

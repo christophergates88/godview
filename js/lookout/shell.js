@@ -3,6 +3,7 @@
 // loads, so Now shows right away; the globe joins when ready (attachApp).
 // While another tab is open the globe stops drawing (saves battery).
 
+import { crumb } from '../core/crashlog.js';
 import { $ } from './common.js';
 import { prefs, initPlace, preferWatchPlace } from './place.js';
 import { initPicker, openPicker } from './picker.js';
@@ -19,6 +20,7 @@ let app = null;
 
 export function show(tab, opts = {}) {
   if (!TABS.includes(tab)) tab = 'now';
+  crumb(`tab ${tab}`);
   const prev = current;
   current = tab;
   const isMap = tab === 'map';
@@ -32,7 +34,7 @@ export function show(tab, opts = {}) {
   }
   if (prev && prev !== tab && SCREENS[prev]) SCREENS[prev].hide();
   if (app) {
-    app.viewer.useDefaultRenderLoop = isMap;
+    syncGlobe();
     if (isMap) { app.viewer.resize(); app.viewer.scene.requestRender(); }
   }
   if (!isMap) {
@@ -61,10 +63,36 @@ export function initShell() {
   initPlace().catch((e) => console.warn('place', e));
 }
 
+// The globe only draws when you can see it: on the Map tab with nothing covering it.
+// (Drawing under a full-screen report or the Watch screen costs an iPhone memory and battery for nothing.)
+const COVERS = ['report', 'drive', 'viewer', 'watch', 'settings', 'placepick'];
+function covered() {
+  return COVERS.some((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.hidden) return false;
+    return !(['watch', 'settings', 'placepick'].includes(id) && window.innerWidth >= 900);   // dialogs on a big screen leave the globe in view
+  });
+}
+export function syncGlobe() {
+  if (!app) return;
+  const run = current === 'map' && !covered();
+  if (app.viewer.useDefaultRenderLoop !== run) {
+    app.viewer.useDefaultRenderLoop = run;
+    if (run) app.viewer.scene.requestRender();
+  }
+}
+let coverWatch = null;
+function watchCovers() {
+  if (coverWatch || typeof MutationObserver === 'undefined') return;
+  coverWatch = new MutationObserver(() => syncGlobe());
+  for (const id of COVERS) { const el = document.getElementById(id); if (el) coverWatch.observe(el, { attributes: true, attributeFilter: ['hidden'] }); }
+}
+
 // The globe app has started: { viewer, manager, globe, watch, status, ui }.
 export function attachApp(a) {
   app = a;
-  app.viewer.useDefaultRenderLoop = current === 'map';
+  watchCovers();
+  syncGlobe();
   setApp(a);
   preferWatchPlace(async () => (a.watch.connected() ? (await a.watch.api('/places', { timeoutMs: 8000 })).places || [] : []));
 }

@@ -15,6 +15,7 @@ import * as watchMod from './watch.js';
 import * as statusMod from './status.js';
 import * as uiMod from './ui.js';
 import { attachApp } from './lookout/shell.js';
+import { problemAtStart } from './core/crashlog.js';
 
 // Self-test rows for the plane-card sources (adsbdb, planespotters): one real
 // lookup of a random aircraft each. Same row shape as the layer rows.
@@ -81,4 +82,8 @@ export async function start() {
 
   // The Lookout screens (Now, Cams, Scanner, News) started before the globe; hand them the app.
   attachApp({ viewer, manager, globe, watch: watchMod, status: statusMod, ui: uiMod });
+
+  // If iOS stopped GodView last time (too much memory), say so once, with what it was doing.
+  const prob = problemAtStart();
+  if (prob) setTimeout(() => uiMod.toast(`GodView restarted after being stopped unexpectedly. Details: Settings › About.`, 7000), 1500);
 }

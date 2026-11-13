@@ -14,6 +14,7 @@ import { initStatus } from './status.js';
 import { initHint } from './hint.js';
 import { ask, choose } from './dialog.js';
 import { prefs as lookoutPrefs } from './lookout/place.js';
+import { crumb, lastProblem, problemAtStart, describeProblem } from './core/crashlog.js';
 
 const $ = (id) => document.getElementById(id);
 const Cesium = () => window.Cesium;
@@ -531,6 +532,7 @@ const WMO = {
 };
 
 async function openPoint(lat, lon) {
+  crumb('map: tapped a spot');
   if (globe.isFollowing()) globe.unfollow();
   if (current && current.layer) M.select(null, null);
   stopAudio();
@@ -574,6 +576,7 @@ function initBrief() {
 }
 
 async function openBrief(lat, lon, label) {
+  crumb("map: what's here");
   if (globe.isFollowing()) globe.unfollow();
   if (current && current.layer) M.select(null, null);
   stopAudio();
@@ -912,6 +915,14 @@ function openSettings() {
   ver.className = 'about';
   ver.textContent = `${APP.name} ${APP.version} · ${LAYERS.length} layers`;
   body.appendChild(ver);
+  const lp = lastProblem();
+  if (lp) {
+    const pr = document.createElement('p');
+    pr.className = 'about';
+    pr.id = 'set-lastproblem';
+    pr.textContent = `Last time GodView was stopped unexpectedly: ${describeProblem(lp)}.`;
+    body.appendChild(pr);
+  }
 
   $('settings').hidden = false;
 }
