@@ -28,6 +28,12 @@ function load() { try { conn = JSON.parse(localStorage.getItem(KEY) || 'null'); 
 function save(c) { conn = c; try { if (c) localStorage.setItem(KEY, JSON.stringify(c)); else localStorage.removeItem(KEY); } catch { /* storage blocked */ } }
 export const connected = () => !!(conn && conn.token && conn.host);
 
+// The setup link (or just its "<key>@<name>.workers.dev" part), as pasted.
+export function setupFrom(text) {
+  const m = String(text || '').trim().match(/(?:#watch=)?([A-Za-z0-9_%-]{16,})@([a-z0-9.-]+\.workers\.dev)\b/i);
+  return m ? { token: decodeURIComponent(m[1]), host: m[2].toLowerCase() } : null;
+}
+
 // One-time setup link: #watch=<token>@<host>. Stored, then removed from the address bar.
 export function consumeHash() {
   // main.js already read (and removed) the hash before the globe loaded.
@@ -121,7 +127,7 @@ async function refresh() {
 
 function connLine() {
   if (!connected()) {
-    return `<div class="w-conn off"><b>Not set up yet.</b> On the Mac, double-click <b>Deploy GodView Watch</b> in Documents › GodView. Then open the link it prints on this device.<div class="w-paste"><input id="w-link" placeholder="…or paste the setup link here"><button class="btn" id="w-link-go">Connect</button></div></div>`;
+    return `<div class="w-conn off"><b>Not connected on this device.</b> On the Mac, double-click <b>Deploy GodView Watch</b> in Documents › GodView. It copies a setup link: paste it here and tap Connect. (Each device, and the iPhone app apart from Safari, connects once.)<div class="w-paste"><input id="w-link" placeholder="Paste the setup link here" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="w-link-go">Connect</button></div></div>`;
   }
   if (!lastStatus) return '<div class="w-conn">Checking…</div>';
   if (!lastStatus.ok) return `<div class="w-conn bad"><b>Can't reach the watch service</b> (${escapeHtml(lastStatus.error)}). The map still works. <button class="linkish" id="w-forget">Forget this device's key</button></div>`;
@@ -151,11 +157,13 @@ function render() {
 }
 
 function wireCommon() {
-  $('w-link-go')?.addEventListener('click', () => {
-    const v = $('w-link').value.trim();
-    const m = v.match(/#watch=([^@]+)@([a-z0-9.-]+\.workers\.dev)/i);
-    if (!m) { toastFn('That is not a GodView setup link.'); return; }
-    save({ token: decodeURIComponent(m[1]), host: m[2].toLowerCase() });
+  $('w-link-go')?.addEventListener('click', async () => {
+    let v = $('w-link').value.trim();
+    // Empty box: try the clipboard (the Deploy script copies the link; iPhone shows a Paste button).
+    if (!v && navigator.clipboard && navigator.clipboard.readText) { try { v = (await navigator.clipboard.readText()).trim(); } catch { /* not allowed: ask to paste */ } }
+    const m = setupFrom(v);
+    if (!m) { toastFn(v ? 'That is not a GodView setup link.' : 'Paste the setup link in the box first (touch and hold, then Paste).'); return; }
+    save(m);
     toastFn('Watch connected on this device.');
     open('places');
   });

@@ -333,7 +333,7 @@ def zip_centres():
             z = zipfile.ZipFile(io.BytesIO(fetch(ZCTA_CENTRES.format(y=y), timeout=300, tries=2)))
             with z.open(z.namelist()[0]) as f:
                 rd = csv.reader(io.TextIOWrapper(f, encoding='utf-8', newline=''), delimiter='\t')
-                head = [h.strip().upper() for h in next(rd)]
+                head = [h.strip().lstrip('\ufeff').upper() for h in next(rd)]
                 gi, la, lo = head.index('GEOID'), head.index('INTPTLAT'), head.index('INTPTLONG')
                 out = {r[gi].strip(): (round(float(r[la]), 5), round(float(r[lo]), 5)) for r in rd if len(r) > lo}
             log(f'   {len(out)} ZIP code centres ({y})')

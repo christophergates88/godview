@@ -11,7 +11,11 @@ import { summarise } from '../js/layers/people-census.js';
 import { parseNotable } from '../js/layers/people-notable.js';
 import { recipients } from '../js/layers/people-money.js';
 import { parseEcho } from '../js/layers/people-epa.js';
-import { parseCare } from '../js/layers/people-care.js';
+import { parseCare, parsePackCare, flagged } from '../js/layers/people-care.js';
+import { tileKeys } from '../js/layers/lib/packs.js';
+import { facing } from '../js/layers/alpr.js';
+import { carrier } from '../js/layers/cell-towers.js';
+import * as F from './fixtures.mjs';
 import { parseFdic, fdicUrl } from '../js/layers/people-banks.js';
 import { needsSmaller, echoUrl } from '../js/layers/people-epa.js';
 import { fromCensusReporter, parseCensusApi, VARS } from '../js/layers/people-census.js';
@@ -135,6 +139,41 @@ t('OpenStreetMap care places: hospital and nursing home shown, person-named care
   assert.ok(c[0].links.some((l) => /medicare\.gov\/care-compare/.test(l.href)));
   assert.match(c[2].title, /private name not shown/);
   assert.ok(!JSON.stringify(c[2]).includes('Mary') && !JSON.stringify(c[2]).includes('Elm'));
+});
+t('data pack: care rows -> cards (stars, citations, fines, abuse, turnover, hospital measures, private name withheld)', () => {
+  const tile = F.packTile('care', '30_-85');
+  const items = tile.rows.map((r) => Object.fromEntries(tile.fields.map((k, i) => [k, r[i]])));
+  const c = parsePackCare(items);
+  const rows = (x) => Object.fromEntries(x.rows);
+  assert.equal(c.length, 3);
+  assert.equal(c[0].title, 'Sample Medical Center');
+  assert.equal(rows(c[0])['Medicare overall'], '★★★☆☆ 3 of 5');
+  assert.equal(rows(c[0])['Death rates'], '1 measure worse than the national rate');
+  assert.equal(rows(c[0])['Readmissions'], '2 measures worse than the national rate');
+  assert.equal(rows(c[0])['Safety of care'], '1 better');
+  assert.match(c[0].say, /^Sample Medical Center is an acute care hospital, rated 3 of 5 stars by Medicare, with an emergency department and worse than the national rate on 1 death-rate measure\.$/);
+  assert.match(c[0].link.href, /care-compare\/details\/hospital\/119999\?state=GA$/);
+  assert.equal(c[1].color, '#ff4d5e');                          // abuse citation -> flagged red
+  assert.ok(flagged(items[1]) && !flagged(items[2]) && !flagged(items[0]));
+  const r1 = rows(c[1]);
+  assert.equal(r1['Federal fines (last 3 years)'], '2 fines, $25,351 in total');
+  assert.equal(r1['Citations, latest inspection cycle'], '14');
+  assert.equal(r1['Nursing staff turnover'], '61% a year');
+  assert.equal(r1['Changed owners'], 'In the last 12 months');
+  assert.equal(r1['Legal business name'], 'Sample Oaks Operations LLC');
+  assert.match(c[1].say, /rated 1 of 5 stars overall by Medicare, fined 2 times \(\$25,351\) in the last 3 years and cited for abuse\./);
+  assert.match(c[1].link.href, /care-compare\/details\/nursing-home\/115999\/view-all\?state=GA$/);
+  assert.match(c[2].title, /private name not shown/);
+  assert.ok(!JSON.stringify(c[2]).includes('Mary') && !JSON.stringify(c[2]).includes('Elm'));
+});
+t('data pack: tiles touched by a view circle', () => {
+  assert.deepEqual(tileKeys({ lat: 32.84, lon: -83.63, radiusKm: 40 }), ['30_-85']);
+  assert.deepEqual(tileKeys({ lat: 35.1, lon: -85.1, radiusKm: 30 }).sort(), ['30_-85', '30_-90', '35_-85', '35_-90'].sort());
+  assert.deepEqual(tileKeys({ lat: -0.02, lon: 0.02, radiusKm: 10 }).sort(), ['-5_-5', '-5_0', '0_-5', '0_0'].sort());
+});
+t('plate readers: direction in words; cell towers: carrier names', () => {
+  assert.equal(facing('N'), 'north'); assert.equal(facing('90;270'), 'east and west'); assert.equal(facing('225'), 'south-west'); assert.equal(facing(''), '');
+  assert.equal(carrier('New Cingular Wireless PCS, LLC'), 'AT&T'); assert.equal(carrier('Cellco Partnership'), 'Verizon'); assert.equal(carrier('Sample Wireless LLC'), '');
 });
 t('FDIC branches', () => { const b = parseFdic(P.fdic()); assert.equal(b.length, 2); assert.equal(b[0].color, '#ffd34d'); });
 t('FDIC request uses the documented filter form', () => {

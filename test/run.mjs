@@ -414,7 +414,7 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await p2.click('#btn-watch');
   await p2.waitForTimeout(300);
   const msg = await p2.evaluate(() => document.getElementById('watch-body').innerText);
-  check('not set up: plain instructions shown, map still works', /Not set up yet/.test(msg) && /Deploy GodView Watch/.test(msg) && await p2.evaluate(() => window.GodView.manager.state.earthquakes.enabled), msg.slice(0, 120));
+  check('not set up: plain instructions shown, map still works', /Not connected on this device/.test(msg) && /paste it here/.test(msg) && /Deploy GodView Watch/.test(msg) && await p2.evaluate(() => window.GodView.manager.state.earthquakes.enabled), msg.slice(0, 120));
   await p2.screenshot({ path: path.join(outDir, 'watch-not-set-up.png') });
   await c2.close();
 }
@@ -566,9 +566,24 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await page.evaluate(() => { window.GodView.globe.jumpTo(32.84, -83.63, 150); for (const id of ['powerPlants', 'cellTowers', 'nuclear', 'peopleCare']) window.GodView.manager.enable(id, true); });
   const st = await waitLayers(page, ['powerPlants', 'cellTowers', 'nuclear', 'peopleCare']);
   check('power plants load from the bundled list', st.powerPlants.status === 'ok' && st.powerPlants.count >= 1, `${st.powerPlants.status} ${st.powerPlants.count}`);
-  check('cell towers from the HIFLD mirror', st.cellTowers.status === 'ok' && st.cellTowers.count === 2, `${st.cellTowers.status} ${st.cellTowers.count} ${st.cellTowers.message}`);
+  check('cell towers from the weekly data pack', st.cellTowers.status === 'ok' && st.cellTowers.count === 2 && /copy from/.test(st.cellTowers.note), `${st.cellTowers.status} ${st.cellTowers.count} ${st.cellTowers.message} ${st.cellTowers.note}`);
   check('nuclear plants load from the bundled list', st.nuclear.status === 'ok' && st.nuclear.count >= 1, `${st.nuclear.status} ${st.nuclear.count}`);
-  check('hospitals and nursing homes from the HIFLD mirror', st.peopleCare.status === 'ok' && st.peopleCare.count === 3, `${st.peopleCare.status} ${st.peopleCare.count} ${st.peopleCare.message}`);
+  check('hospitals and nursing homes from the weekly data pack', st.peopleCare.status === 'ok' && st.peopleCare.count === 3 && /flagged by Medicare \(1 here\)/.test(st.peopleCare.note), `${st.peopleCare.status} ${st.peopleCare.count} ${st.peopleCare.message} ${st.peopleCare.note}`);
+  const home = await page.evaluate(() => { const M = window.GodView.manager; const it = M.items('peopleCare').find((x) => /Sample Oaks/.test(x.title)); return it ? M.describe('peopleCare', it.key) : null; });
+  const homeRows = home ? Object.fromEntries(home.rows) : {};
+  check('nursing home card: Medicare stars, citations, federal fines, abuse citation, Special Focus candidate, turnover, its own Care Compare page',
+    home && homeRows['Medicare overall'] === '★☆☆☆☆ 1 of 5' && /2 fines, \$25,351 in total/.test(homeRows['Federal fines (last 3 years)'] || '') && /^Yes/.test(homeRows['Cited for abuse'] || '')
+      && /^Candidate/.test(homeRows['Special Focus Facility'] || '') && homeRows['Citations, latest inspection cycle'] === '14' && homeRows['Nursing staff turnover'] === '61% a year'
+      && /care-compare\/details\/nursing-home\/115999\//.test(home.link.href) && /rated 1 of 5 stars/.test(home.say),
+    JSON.stringify(home).slice(0, 400));
+  const tower = await page.evaluate(() => { const M = window.GodView.manager; const it = M.items('cellTowers').find((x) => /AT&T/.test(x.title)); return it ? M.describe('cellTowers', it.key) : null; });
+  check('cell site card: carriers sharing one structure, height in m and ft, FCC registration', tower && tower.title === 'AT&T + Verizon' && tower.rows.some(([k, v]) => k === 'Structure height' && /91 m, about 300 ft/.test(v))
+    && tower.rows.some(([k, v]) => k === 'FCC tower registration' && v === '1000001'), JSON.stringify(tower).slice(0, 300));
+  await page.evaluate(() => window.GodView.manager.enable('alpr', true));
+  const sa = await waitLayers(page, ['alpr']);
+  const cam = await page.evaluate(() => { const M = window.GodView.manager; const it = M.items('alpr').find((x) => x.key === 'n7002'); return it ? M.describe('alpr', it.key) : null; });
+  check('plate-reader cameras from the weekly data pack ("facing" in words)', sa.alpr.status === 'ok' && sa.alpr.count >= 2 && /copy from/.test(sa.alpr.note) && cam && cam.rows.some(([k, v]) => k === 'Facing' && v === 'east and west'),
+    `${sa.alpr.status} ${sa.alpr.count} ${sa.alpr.note} ${JSON.stringify(cam && cam.rows)}`);
   // (plant card wording is covered by the Earth pack's own checks)
 
   const careNames = await page.evaluate(() => window.GodView.manager.items('peopleCare').map((x) => x.title).join(' | '));
@@ -629,13 +644,16 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
 
   // Main infrastructure source down -> OpenStreetMap fallback, said plainly
   const c2 = await browser.newContext(iphone);
-  await setupRoutes(c2, { infraDown: true });
+  await setupRoutes(c2, { infraDown: true, packsDown: true });
   const p2 = await c2.newPage();
   await p2.goto(BASE, { waitUntil: 'load' });
   await p2.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
   await p2.evaluate(() => { window.GodView.globe.jumpTo(32.84, -83.63, 150); window.GodView.manager.enable('powerPlants', true); });
   const s2 = await waitLayers(p2, ['powerPlants']);
   check('power plants still load when the infrastructure servers are down', s2.powerPlants.status === 'ok' && s2.powerPlants.count >= 1, `${s2.powerPlants.status} ${s2.powerPlants.message}`);
+  await p2.evaluate(() => window.GodView.manager.enable('cellTowers', true));
+  const s3 = await waitLayers(p2, ['cellTowers']);
+  check('cell towers fall back to OpenStreetMap when the weekly copy cannot be read, and say so', s3.cellTowers.status === 'ok' && /Weekly copy unavailable/.test(s3.cellTowers.note), `${s3.cellTowers.status} ${s3.cellTowers.message} ${s3.cellTowers.note}`);
   // Reports without the Watch service: built in the browser, same fingerprint scheme, not stored
   await p2.click('#btn-watch');
   await p2.click('#watch-tabs button[data-tab="reports"]');
@@ -644,6 +662,24 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await p2.waitForFunction(() => !document.getElementById('report').hidden, null, { timeout: 30000 }).catch(() => {});
   const local = await p2.evaluate(() => document.querySelector('#report .hash')?.textContent || '');
   check('report works without the Watch service (built in the app, fingerprint checks out, not stored)', /fingerprint checks out/.test(local) && !/stored/.test(local), local);
+  // Connecting a device by pasting the setup link (the iPhone app keeps its own storage, apart from Safari)
+  const p3 = await c2.newPage();
+  await p3.goto(BASE, { waitUntil: 'load' });
+  await p3.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await p3.click('#btn-watch');
+  await p3.click('#watch-tabs button[data-tab="places"]');
+  await p3.waitForTimeout(300);
+  const offText = await p3.evaluate(() => document.querySelector('.w-conn.off')?.innerText || '');
+  await p3.fill('#w-link', 'hello');
+  await p3.click('#w-link-go');
+  await p3.waitForTimeout(300);
+  const refused = await p3.evaluate(() => !localStorage.getItem('godview.watch.v1'));
+  await p3.fill('#w-link', 'Setup link: ' + 'k'.repeat(48) + '@' + WATCH_HOST);
+  await p3.click('#w-link-go');
+  await p3.waitForTimeout(500);
+  const saved = await p3.evaluate(() => JSON.parse(localStorage.getItem('godview.watch.v1') || 'null'));
+  check('connect a device by pasting the setup link (or just its key@host part); other text is refused',
+    /paste it here/.test(offText) && refused && saved && saved.token === 'k'.repeat(48) && saved.host === WATCH_HOST, JSON.stringify({ offText: offText.slice(0, 90), refused, saved: !!saved }));
   await c2.close();
 }
 

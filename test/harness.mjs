@@ -87,6 +87,12 @@ export function answer(u, mode) {
     case 'services9.arcgis.com': return mode.viirsDown ? J({ error: { code: 500, message: 'down' } }) : J(F.viirs());
     case 'raw.githubusercontent.com':
       if (/lookout\/feeds\/ga511\.json/.test(p)) return mode.ga511FeedDown ? { status: 404, type: 'text/plain', body: 'nf' } : J(F.ga511Feed(mode.ga511FeedAgeMs));
+      if (/\/godview\/data\//.test(p)) {
+        if (mode.packsDown) return { status: 404, type: 'text/plain', body: '404: Not Found' };
+        if (/\/index\.json$/.test(p)) return J(F.packIndex());
+        const m = p.match(/\/godview\/data\/(\w+)\/(-?\d+_-?\d+)\.json$/);
+        return m ? J(F.packTile(m[1], m[2])) : { status: 404, type: 'text/plain', body: '404: Not Found' };
+      }
       return null;
     case 'volcanoes.usgs.gov': return J(F.volcanoes());
     case 'api.water.noaa.gov': return J(F.gauges());
@@ -152,6 +158,7 @@ export async function setupRoutes(context, mode = {}) {
       hdr['access-control-allow-origin'] = '*'; // test page runs on 127.0.0.1; real CORS rules are unit-tested in server/watch/test
       return route.fulfill({ status: resp.status, headers: hdr, body: await resp.text() });
     }
+    if (host === WATCH_HOST) return route.abort('failed'); // a watch service this test doesn't run
     let target = u;
     if (/workers\.dev$/.test(host)) {           // the data relay
       if (mode.relayDown) return route.abort('failed');

@@ -269,3 +269,47 @@ export const viirs = () => ({ type: 'FeatureCollection', crs: { type: 'name', pr
   { type: 'Feature', id: 501, geometry: { type: 'Point', coordinates: [-83.64, 32.85] }, properties: { latitude: 32.85, longitude: -83.64, acq_time: now - 5 * 3600e3, satellite: 'N20', confidence: 'nominal', frp: 5.4, daynight: 'D', hours_old: 5 } },
   { type: 'Feature', id: 502, geometry: { type: 'Point', coordinates: [-83.81, 33.06] }, properties: { latitude: 33.06, longitude: -83.81, acq_time: now - 9 * 3600e3, satellite: 'N21', confidence: 'high', frp: 22.7, daynight: 'N', hours_old: 9 } },
 ] });
+
+// ---------------------------------------------------------------- v6.1: weekly data packs (raw.githubusercontent.com/<owner>/godview/data/)
+// Same shape scripts/build_packs.py writes. Positions near Macon (public), sample names.
+export const PACK_BUILT = '2026-11-09T09:41:00Z';
+const PACK_FIELDS = {
+  alpr: ['lat', 'lon', 'osm', 'operator', 'maker', 'facing', 'zone'],
+  towers: ['lat', 'lon', 'licensee', 'city', 'state', 'heightM', 'supportM', 'callsign', 'structure', 'asr', 'carriers'],
+  care: ['lat', 'lon', 'kind', 'name', 'address', 'city', 'state', 'zip', 'type', 'ownership', 'legal', 'chain', 'beds', 'residents',
+    'overall', 'inspection', 'staffing', 'quality', 'fines', 'fineDollars', 'penalties', 'abuse', 'focus', 'ccn',
+    'emergency', 'mortWorse', 'safetyWorse', 'readmWorse', 'mortBetter', 'safetyBetter', 'readmBetter',
+    'turnover', 'ownerChanged', 'deficiencies', 'topRated', 'approx'],
+};
+const careRow = (o) => PACK_FIELDS.care.map((k) => (k in o ? o[k] : null));
+const PACK_ROWS = {
+  alpr: [
+    [32.85, -83.62, 7001, 'Sample County Sheriff', 'Flock Safety', 'N', 'traffic'],
+    [32.83, -83.66, 7002, '', 'Flock Safety', '90;270', ''],
+    [32.80, -83.70, 7003, 'Sample City Police', 'Motorola Solutions', '', ''],
+  ],
+  towers: [
+    [32.85, -83.62, 'New Cingular Wireless PCS, LLC · Cellco Partnership', 'Macon', 'GA', 91.4, 85, 'KNKA000 KNKB000', 'Tower', '1000001', 2],
+    [32.83, -83.65, 'Sample Wireless LLC', 'Macon', 'GA', 60, null, '', '', '', 1],
+  ],
+  care: [
+    careRow({ lat: 32.83, lon: -83.64, kind: 'H', name: 'Sample Medical Center', address: '1 Sample St', city: 'Macon', state: 'GA', zip: '31201',
+      type: 'Acute Care Hospitals', ownership: 'Voluntary non-profit - Private', overall: 3, ccn: '119999', emergency: 'Yes',
+      mortWorse: 1, safetyWorse: 0, readmWorse: 2, mortBetter: 0, safetyBetter: 1, readmBetter: 0, approx: 0 }),
+    careRow({ lat: 32.86, lon: -83.61, kind: 'N', name: 'Sample Oaks Health And Rehabilitation', address: '2 Sample Ave', city: 'Macon', state: 'GA', zip: '31201',
+      type: 'Medicare and Medicaid', ownership: 'For profit - Limited Liability company', legal: 'Sample Oaks Operations LLC', chain: 'Sample Care Group',
+      beds: 100, residents: 88.4, overall: 1, inspection: 1, staffing: 2, quality: 3, fines: 2, fineDollars: 25350.5, penalties: 3, abuse: 1, focus: 'candidate',
+      ccn: '115999', turnover: 61.2, ownerChanged: 1, deficiencies: 14, topRated: 0, approx: 0 }),
+    careRow({ lat: 32.84, lon: -83.62, kind: 'N', name: 'Mary Smith', address: '9 Elm St', city: 'Macon', state: 'GA', zip: '31201', type: 'Medicaid',
+      ownership: 'For profit - Individual', legal: 'Mary Smith', beds: 6, residents: 5, overall: 4, inspection: 4, staffing: 3, quality: 4,
+      fines: 0, fineDollars: 0, penalties: 0, abuse: 0, focus: '', ccn: '115998', turnover: null, ownerChanged: 0, deficiencies: 2, topRated: 0, approx: 0 }),
+  ],
+};
+const packTileOf = (r) => `${Math.floor(r[0] / 5) * 5}_${Math.floor(r[1] / 5) * 5}`;
+export const packIndex = () => ({
+  v: 1, tile: 5, updated: PACK_BUILT,
+  packs: Object.fromEntries(Object.keys(PACK_FIELDS).map((k) => [k, {
+    built: PACK_BUILT, count: PACK_ROWS[k].length, tiles: [...new Set(PACK_ROWS[k].map(packTileOf))], fields: PACK_FIELDS[k], source: 'test', licence: 'test', error: null,
+  }])),
+});
+export const packTile = (name, key) => ({ pack: name, built: PACK_BUILT, fields: PACK_FIELDS[name], rows: (PACK_ROWS[name] || []).filter((r) => packTileOf(r) === key) });

@@ -94,6 +94,8 @@ export const ENDPOINTS = {
   // Lookout repo's GitHub Action with the owner's key (no key needed here). With a
   // key saved in Settings, the live 511GA API below is used instead.
   ga511Feed: 'https://raw.githubusercontent.com/christophergates88/lookout/feeds/ga511.json',
+  // Weekly data packs (plate readers, cell towers, hospitals and nursing homes): see scripts/build_packs.py
+  packs: 'https://raw.githubusercontent.com/christophergates88/godview/data/',
   ga511Cameras: 'https://511ga.org/api/v2/get/cameras?key={key}&format=json',
   ga511Events: 'https://511ga.org/api/v2/get/event?key={key}&format=json',
   caltransCctv: 'https://cwwp2.dot.ca.gov/data/d{d}/cctv/cctvStatusD{dd}.json',

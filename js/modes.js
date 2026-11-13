@@ -14,7 +14,7 @@ export const MODES = [
   { id: 'hazards', name: 'Hazards', color: '#ff4d5e', icon: I('M12 3l10 18H2L12 3zM12 10v5M12 18v.01'),
     layers: ['earthquakes', 'events', 'firePerimeters', 'fireIncidents', 'firms', 'volcanoes', 'rivers', 'alerts', 'airQuality'] },
   { id: 'roads', name: 'Roads', color: '#c6ff4a', icon: I('M8 3L4 21M16 3l4 18M12 4v3M12 10v3M12 16v4'),
-    layers: ['ga511Cameras', 'ga511Events', 'caltrans', 'amtrak', 'bikeshare', 'alerts'] },
+    layers: ['ga511Cameras', 'ga511Events', 'caltrans', 'alpr', 'amtrak', 'bikeshare', 'alerts'] },
   { id: 'night', name: 'Night', color: '#b18cff', icon: I('M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z'),
     layers: ['gibsNight', 'satStations', 'satellites', 'aurora', 'daynight', 'launches'] },
   { id: 'everything', name: 'Everything', color: '#e8edf2', icon: I('M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5'), layers: '*' },
@@ -26,8 +26,9 @@ export const GROUP_COLORS = { air: '#6fb7ff', space: '#b18cff', sea: '#3ee6c4', 
 
 // Which layer ids a mode turns on (only layers that exist and have their key).
 // Layers whose only source is unreliable stay out of every mode (you can still
-// turn them on by hand in "All layers").
-export const UNRELIABLE = new Set(['alpr']);
+// turn them on by hand in "All layers"). None since v6.1: plate readers now load
+// from the weekly data pack.
+export const UNRELIABLE = new Set([]);
 
 export function modeLayers(mode, layers, settings, apiKeys) {
   const have = (l) => !l.needsKey || apiKeys.get(l.needsKey);

@@ -120,8 +120,8 @@ Day/night, US weather alerts, Earthquakes, Fires & events.
 | Ground | Bike share docks | GBFS (6 Lyft-run US systems) | Direct | Area; nearest supported system |
 | Ground | Power plants | HIFLD Open (EPA/EIA plants), 2025 copy kept by NASA | Direct (relay fallback) | Area; **a frozen 2025 snapshot, not live**; OpenStreetMap only if it is down |
 | Ground | Nuclear reactors | NRC daily power-reactor status, published by FEMA | Direct (relay fallback) | Shows % power; 0% usually means refuelling or maintenance; OpenStreetMap only if down |
-| Ground | Cell towers | HIFLD Open (FCC cellular licences), 2025 copy kept by NASA | Direct (relay fallback) | Loads only when zoomed in under 300 km; snapshot, not live |
-| Ground | Plate-reader cameras (ALPR) | OpenStreetMap via Overpass | Direct (relay fallback) | **Often unavailable** (Overpass is busy); volunteer-mapped; kept out of every mode, switch it on by hand |
+| Ground | Cell towers | HIFLD Open (FCC cellular licences, 2025 snapshot), read from GodView's weekly data pack; OpenStreetMap if the pack can't be read | Direct | Loads when zoomed in under 400 km; snapshot, not live; carrier names (AT&T, Verizon, T-Mobile) shown plainly |
+| Ground | Plate-reader cameras (ALPR) | OpenStreetMap (volunteer-mapped, e.g. DeFlock), read from GodView's weekly data pack; live Overpass only if the pack can't be read | Direct | Coverage is only what volunteers have mapped; shows operator, maker and which way it faces |
 | Ground | Submarine cables | TeleGeography (CC BY-NC-SA) | Relay | Approximate routes |
 | Signals | Radio stations | radio-browser.info | Direct | Area; plays https streams only |
 | Signals | Wikipedia nearby | MediaWiki geosearch | Direct | Within 10 km of view centre |
@@ -179,6 +179,17 @@ save downloaded data in the cache, as normal use does).
   511 live instead of every ~15 minutes.
 - **No browser pop-ups (v6):** the iPhone app's web view ignores confirm() and
   prompt(), so every question GodView asks is an in-app box (`js/dialog.js`).
+- **Layers that always load (v6.1):** plate-reader cameras, cell towers and
+  hospitals & nursing homes read GodView's weekly data packs (see "Data packs"
+  below) instead of servers that time out. Plate readers are now in the Roads
+  mode. Nursing homes show Medicare's ratings, fines, abuse citations and staff
+  turnover; hospitals show their star rating and death-rate, safety and
+  readmission measures against the national rate.
+- **Connecting a device to Watch (v6.1):** each device keeps its own key, and the
+  iPhone app keeps its own copy apart from Safari. The Deploy script copies the
+  setup link to the Mac's clipboard; on the iPhone, paste it in the bell panel
+  and tap Connect (an empty box reads the clipboard). A brief that falls back to
+  plain wording says why.
 
 ## Watch, Brief, Remember (the watch service)
 
@@ -333,7 +344,7 @@ addresses are never shown (they can be home addresses).
 | Notable people born here | Wikidata + Wikipedia | Direct | Only people with an English Wikipedia article, at their birthplace |
 | Federal money here | USAspending.gov | Direct (POST; no relay possible) | Top contract and grant recipients in the county, last 12 months; persons counted, never named |
 | EPA-regulated sites | EPA ECHO | Direct (relay fallback) | Up to 10 miles round the view centre (smaller where sites are dense); inspections, violations, penalties; red = violation now |
-| Hospitals & nursing homes | HIFLD Open hospitals and nursing homes (2025 copy kept by NASA); OpenStreetMap if down | Direct (relay fallback) | Locations only, with a link to Medicare Care Compare for official star ratings (CMS's own data service blocks web pages and the relay) |
+| Hospitals & nursing homes | Weekly data pack: HIFLD Open hospitals (2025 snapshot) and CMS nursing-home Provider Information; OpenStreetMap if the pack can't be read | Direct | Nursing homes show Medicare's star ratings (overall, inspections, staffing, quality), federal fines and penalties of the last 3 years, abuse citations and Special Focus status, with a link to that home's Care Compare page. Red = flagged by Medicare. A home listed under a person's name is not named |
 | Bank branches (FDIC) | FDIC BankFind | Direct (relay fallback) | One state per request; nearest branches kept |
 | Disaster declarations (FEMA) | OpenFEMA | Direct (relay fallback) | County and statewide declarations |
 | Missing children (NCMEC) | NCMEC state RSS | Relay | Official posters only, unchanged; placed at the town they name. Not AMBER Alerts. |
@@ -383,8 +394,15 @@ was loaded from the live site first, so each one is known to answer a web page d
 **Power plants and Nuclear plants now always load.** They used to ask OpenStreetMap's public
 servers, which are overloaded ("at capacity") most of the time. They now read a list that ships
 with GodView: `js/data/power-plants.json`, the World Resources Institute's Global Power Plant
-Database (21,337 plants of 10 MW and up, 2021 snapshot, CC BY 4.0). Plate-reader cameras and
-Comms towers still depend on OpenStreetMap's servers and say so when those are full.
+Database (21,337 plants of 10 MW and up, 2021 snapshot, CC BY 4.0).
+
+**Data packs (v6.1).** Plate-reader cameras, cell towers and hospitals & nursing homes used to ask
+servers that are usually too slow or full (OpenStreetMap's Overpass, NASA's HIFLD mirror) or that
+web pages can't read at all (CMS). A GitHub Action (`.github/workflows/packs.yml`, every Monday,
+or "Run workflow" by hand) runs `scripts/build_packs.py`, which downloads them in full and
+publishes them, cut into 5-degree tiles, to this repo's `data` branch. The app reads only the
+tiles around the view from `raw.githubusercontent.com` (no key). `index.json` on that branch
+says when each pack was built; a pack that fails to build keeps its last good copy.
 
 `js/layers/lib/gibs.js` makes a NASA picture layer from one line (see `js/layers/orbit.js`): NASA
 publishes about 1,300 products, so more are easy to add. Sample data for the tests is in
