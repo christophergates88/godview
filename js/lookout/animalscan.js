@@ -70,6 +70,18 @@ async function loadDetector() {
   }
 }
 
+// Check the detector on a still picture (for testing on a real phone or in a browser):
+// import('./js/lookout/animalscan.js').then((m) => m.detectPicture(img))
+export async function detectPicture(source) {
+  if (!detector) { loading = loading || loadDetector(); detector = await loading; }
+  const sw = source.naturalWidth || source.videoWidth || source.width; const sh = source.naturalHeight || source.videoHeight || source.height;
+  const c = document.createElement('canvas'); c.width = 640; c.height = Math.round((640 * sh) / sw);
+  c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+  const r = detector.detectForVideo(c, performance.now() + Math.random());
+  const all = (r.detections || []).map((d) => ({ label: d.categories?.[0]?.categoryName || '', score: Math.round((d.categories?.[0]?.score || 0) * 100) / 100, h: Math.round(((d.boundingBox?.height || 0) / c.height) * 100) / 100 }));
+  return { model: detectorKind, all, alarm: all.some((d) => LARGE_ANIMALS.has(d.label) && d.score >= MIN_SCORE) };
+}
+
 // ---------------------------------------------------------------- picture tools
 // Night boost: lift the shadows so the detector sees what the headlights light up.
 const LUT = new Uint8Array(256);
