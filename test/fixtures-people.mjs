@@ -1,6 +1,8 @@
 // Sample responses for the "People & records" layers. Hand-made to match each
 // provider's documented format (field names and structure). NOT real data:
 // every person and organization name below is invented, apart from field names.
+// Map positions are small offsets from the shared selfTest view (33.3, -83.4);
+// move them with it if that view changes.
 
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
@@ -49,9 +51,9 @@ export const wikidataGov = () => ({ head: { vars: ['kind', 'item', 'itemLabel', 
   B({ kind: 'county', item: 'http://www.wikidata.org/entity/Q900002', itemLabel: 'Bibb County', site: 'http://www.maconbibb.us/' }),
 ] } });
 export const wikidataNotable = () => ({ head: { vars: [] }, results: { bindings: [
-  B({ p: 'http://www.wikidata.org/entity/Q900011', pLabel: 'Jules Samplewriter', pDescription: 'American writer (sample)', placeLabel: 'Sampletown', born: '1902-03-04T00:00:00Z', died: '1990-05-06T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Jules_Samplewriter', lat: '33.3268', lon: '-83.3885', img: 'http://commons.wikimedia.org/wiki/Special:FilePath/Sample.jpg' }),
-  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'American athlete (sample)', placeLabel: 'Sampletown', born: '1985-01-01T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '33.3268', lon: '-83.3885' }),
-  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'duplicate row', placeLabel: 'Sampletown', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '33.3268', lon: '-83.3885' }),
+  B({ p: 'http://www.wikidata.org/entity/Q900011', pLabel: 'Jules Samplewriter', pDescription: 'American writer (sample)', placeLabel: 'Sampletown', born: '1902-03-04T00:00:00Z', died: '1990-05-06T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Jules_Samplewriter', lat: '33.2950', lon: '-83.4210', img: 'http://commons.wikimedia.org/wiki/Special:FilePath/Sample.jpg' }),
+  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'American athlete (sample)', placeLabel: 'Sampletown', born: '1985-01-01T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '33.2950', lon: '-83.4210' }),
+  B({ p: 'http://www.wikidata.org/entity/Q900012', pLabel: 'Kim Sampleathlete', pDescription: 'duplicate row', placeLabel: 'Sampletown', article: 'https://en.wikipedia.org/wiki/Kim_Sampleathlete', lat: '33.2950', lon: '-83.4210' }),
   B({ p: 'http://www.wikidata.org/entity/Q900013', pLabel: 'Lee Samplemusician', pDescription: 'American musician (sample)', placeLabel: 'Otherville', born: '1950-07-07T00:00:00Z', article: 'https://en.wikipedia.org/wiki/Lee_Samplemusician', lat: '33.0801', lon: '-83.2321' }),
 ] } });
 
@@ -104,8 +106,8 @@ export const osmCare = () => ({ elements: [
 
 // FDIC BankFind /locations.
 export const fdic = () => ({ meta: { total: 2 }, data: [
-  { data: { NAME: 'Sample State Bank', OFFNAME: 'Sample State Bank', ADDRESS: '100 Main St', CITY: 'Macon', STALP: 'GA', LATITUDE: 33.326, LONGITUDE: -83.388, SERVTYPE: 11, ESTYMD: '1921-05-02', CERT: 99901, MAINOFF: 1, UNINUMBR: 5550001 }, score: 1 },
-  { data: { NAME: 'Example National Bank', OFFNAME: 'Downtown Branch', ADDRESS: '200 Oak St', CITY: 'Macon', STALP: 'GA', LATITUDE: 33.33, LONGITUDE: -83.39, SERVTYPE: 11, ESTYMD: '2001-01-01', CERT: 99902, MAINOFF: 0, UNINUMBR: 5550002 }, score: 1 },
+  { data: { NAME: 'Sample State Bank', OFFNAME: 'Sample State Bank', ADDRESS: '100 Main St', CITY: 'Macon', STALP: 'GA', LATITUDE: 33.290, LONGITUDE: -83.410, SERVTYPE: 11, ESTYMD: '1921-05-02', CERT: 99901, MAINOFF: 1, UNINUMBR: 5550001 }, score: 1 },
+  { data: { NAME: 'Example National Bank', OFFNAME: 'Downtown Branch', ADDRESS: '200 Oak St', CITY: 'Macon', STALP: 'GA', LATITUDE: 33.310, LONGITUDE: -83.430, SERVTYPE: 11, ESTYMD: '2001-01-01', CERT: 99902, MAINOFF: 0, UNINUMBR: 5550002 }, score: 1 },
 ] });
 
 // NCMEC state RSS (structure as published; invented case).
