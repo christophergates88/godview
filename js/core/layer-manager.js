@@ -177,7 +177,7 @@ export class LayerManager {
       const st = this.state[layer.id];
       if (!st.enabled) continue;
       let want = key === 'dataRelay' && (st.status === 'error' || st.status === 'needs-key');
-      if (key.startsWith('key:') && layer.needsKey === key.slice(4)) want = true;
+      if (key.startsWith('key:') && (layer.needsKey === key.slice(4) || (layer.usesKeys || []).includes(key.slice(4)))) want = true;
       if (layer.onSettingChange) this.safe(layer, 'onSettingChange', () => { want = layer.onSettingChange(this.ctx[layer.id], key) || want; });
       if (want) { st.failures = 0; this.refresh(layer.id); }
     }

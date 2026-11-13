@@ -5,17 +5,27 @@
 //   KV               KV namespace "godview-watch" (all state lives here)
 //   WATCH_TOKEN      secret: bearer token the app must send
 //   NTFY_TOPIC       secret: ntfy.sh topic for phone notifications
-//   ANTHROPIC_API_KEY optional secret: lets Claude word the brief
-//   BRIEF_MODEL      optional var/secret: model id (default below)
+//   AI               Workers AI binding (Cloudflare's built-in AI, no key needed):
+//                    words the brief and reads camera frames. Free daily allowance.
+//   ANTHROPIC_API_KEY optional secret: Claude does that wording/reading instead
+//   BRIEF_MODEL      optional var/secret: Claude model id (default below)
+//   WORKERS_AI_MODEL optional var: Workers AI model id (default below)
 // Cron: "*/5 * * * *".
 //
 // Privacy: places (names/coordinates) live only in KV, never in source code.
 
-export const VERSION = '3.0.0';
+export const VERSION = '3.1.0';
 const ALLOWED_ORIGIN = 'https://christophergates88.github.io';
 const APP_URL = 'https://christophergates88.github.io/godview/';
 const UA = 'GodView-Watch/3.0 (personal weather and hazard watcher; https://christophergates88.github.io/godview/)';
 const DEFAULT_MODEL = 'claude-haiku-5-5'; // Claude Haiku 5.5, per platform.claude.com/docs/en/models/overview (Nov 2026)
+// Workers AI: Llama 4 Scout reads text and images (developers.cloudflare.com/workers-ai/models/llama-4-scout-17b-16e-instruct, Nov 2026).
+const WORKERS_AI_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
+// Which AI the service can use: Claude when a key is set, otherwise Cloudflare's own.
+export function aiKind(env) { return env.ANTHROPIC_API_KEY ? 'claude' : env.AI && typeof env.AI.run === 'function' ? 'workers-ai' : null; }
+export function aiModel(env) { const k = aiKind(env); return k === 'claude' ? (env.VISION_MODEL || env.BRIEF_MODEL || DEFAULT_MODEL) : k === 'workers-ai' ? (env.WORKERS_AI_MODEL || WORKERS_AI_MODEL) : null; }
+// Workers AI answers { response: '...' } (some models answer OpenAI-style choices).
+function waiText(r) { if (typeof r === 'string') return r; if (!r) return ''; if (typeof r.response === 'string') return r.response; if (r.response && typeof r.response === 'object') return JSON.stringify(r.response); return r.choices?.[0]?.message?.content || ''; }
 const MAX_PLACES = 12;
 const SUBREQUEST_BUDGET = 45; // Workers free plan allows 50 per invocation; keep 5 for notifications/KV
 const LOG_CAP = 300;          // events kept per place
@@ -708,17 +718,27 @@ export async function analyseFrame(ctx, cam) {
   if (!/^image\/(jpeg|png|gif|webp)$/.test(type)) throw new Error(`camera returned ${type}`);
   const buf = await img.arrayBuffer();
   if (buf.byteLength > 4.5e6) throw new Error('camera image too large');
-  const res = await ctx.fetch(SRC.anthropic, {
-    method: 'POST',
-    headers: { 'x-api-key': ctx.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: ctx.env.VISION_MODEL || ctx.env.BRIEF_MODEL || DEFAULT_MODEL, max_tokens: 300,
-      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: type, data: b64(buf) } }, { type: 'text', text: CAM_PROMPT }] }],
-    }),
-  });
-  if (!res.ok) throw new Error(`vision HTTP ${res.status}`);
-  const j = await res.json();
-  const text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+  let text = '';
+  if (aiKind(ctx.env) === 'claude') {
+    const res = await ctx.fetch(SRC.anthropic, {
+      method: 'POST',
+      headers: { 'x-api-key': ctx.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: aiModel(ctx.env), max_tokens: 300,
+        messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: type, data: b64(buf) } }, { type: 'text', text: CAM_PROMPT }] }],
+      }),
+    });
+    if (!res.ok) throw new Error(`vision HTTP ${res.status}`);
+    const j = await res.json();
+    text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+  } else if (aiKind(ctx.env) === 'workers-ai') {
+    // Workers AI takes the picture as a data: URL (it does not fetch http links).
+    const r = await ctx.env.AI.run(aiModel(ctx.env), {
+      messages: [{ role: 'user', content: [{ type: 'text', text: CAM_PROMPT }, { type: 'image_url', image_url: { url: `data:${type};base64,${b64(buf)}` } }] }],
+      max_tokens: 300, temperature: 0,
+    });
+    text = waiText(r);
+  } else throw new Error('no AI available');
   const m = text.match(/\{[\s\S]*\}/);
   const parsed = m ? JSON.parse(m[0]) : { findings: [] };
   return (parsed.findings || []).filter((f) => f && typeof f.confidence === 'number');
@@ -727,7 +747,7 @@ export const CAM_THRESHOLD = 0.7;
 // Hourly per place (spread over the hour), or at once when a heads-up/act-now
 // event fired at this place in this run. Hard daily cap kept in state.
 export async function cameraChecks(ctx, place, idx, ps, events) {
-  if (!place.camAI || !place.cams?.length || !ctx.env.ANTHROPIC_API_KEY || ctx.test) return [];
+  if (!place.camAI || !place.cams?.length || !aiKind(ctx.env) || ctx.test) return [];
   const slot = Math.floor(ctx.now.getTime() / 300000);
   const urgent = events.some((e) => e.sev >= SEV.heads && e.check !== 'camera');
   if (!urgent && (slot + idx) % 12 !== 0) return [];
@@ -746,7 +766,7 @@ export async function cameraChecks(ctx, place, idx, ps, events) {
         const sev = ['smoke', 'fire', 'flooding', 'crash'].includes(f.what) ? SEV.heads : SEV.info;
         out.push(ev(place, 'camera', sev, `cam:${cam.id}:${f.what}:${hourKey(ctx)}`, `Camera shows ${CAM_WORDS[f.what]}`,
           `The ${cam.name} camera appears to show ${CAM_WORDS[f.what]}${f.note ? ` (${String(f.note).slice(0, 80)})` : ''}. AI reading of one frame, ${Math.round(f.confidence * 100)}% confident.`,
-          '', null, { inference: true, confidence: f.confidence >= 0.85 ? 'high' : 'medium', evidence: [`Frame from ${cam.name}`, `Model: ${ctx.env.VISION_MODEL || ctx.env.BRIEF_MODEL || DEFAULT_MODEL}`], camera: cam.url }));
+          '', null, { inference: true, confidence: f.confidence >= 0.85 ? 'high' : 'medium', evidence: [`Frame from ${cam.name}`, `Model: ${aiModel(ctx.env)}`], camera: cam.url }));
       }
     } catch (e) { (ps.camErr ||= {})[cam.id] = String(e.message || e).slice(0, 100); }
   }
@@ -1074,25 +1094,45 @@ export function briefText(facts) {
   return lines.join('\n');
 }
 
-// Optional: Claude rewrites the brief using ONLY the supplied facts.
+// Optional: AI rewrites the brief using ONLY the supplied facts. Claude when a
+// key is set, otherwise Cloudflare's built-in AI; the rule-based text is always
+// the fallback.
+const BRIEF_SYSTEM = 'You write a short morning brief for one person about his saved places. Use ONLY the facts in the JSON the user sends. Do not add any fact, number, place, forecast or advice that is not in it. Plain words, short sentences, no greetings, no markdown headings. One short paragraph per place, then at most three lines starting with "Do:" taken from the todo lists. If history is short, do not call anything unusual.';
+// Safety net for the smaller model: every number it writes must already be in
+// the facts or in the rule-based text; otherwise the rule-based text is used.
+export function numbersGrounded(text, ...sources) {
+  const have = new Set(sources.join(' ').match(/\d+(?:\.\d+)?/g) || []);
+  return (String(text).match(/\d+(?:\.\d+)?/g) || []).every((n) => have.has(n) || have.has(String(Number(n))));
+}
 export async function claudeWording(ctx, facts, fallback) {
-  if (!ctx.env.ANTHROPIC_API_KEY) return { text: fallback, by: 'rules' };
+  const kind = aiKind(ctx.env);
+  if (!kind) return { text: fallback, by: 'rules' };
   try {
-    const res = await ctx.fetch(SRC.anthropic, {
-      method: 'POST',
-      headers: { 'x-api-key': ctx.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: ctx.env.BRIEF_MODEL || DEFAULT_MODEL,
-        max_tokens: 700,
-        system: 'You write a short morning brief for one person about his saved places. Use ONLY the facts in the JSON the user sends. Do not add any fact, number, place, forecast or advice that is not in it. Plain words, short sentences, no greetings, no markdown headings. One short paragraph per place, then at most three lines starting with "Do:" taken from the todo lists. If history is short, do not call anything unusual.',
-        messages: [{ role: 'user', content: JSON.stringify(facts) }],
-      }),
+    if (kind === 'claude') {
+      const res = await ctx.fetch(SRC.anthropic, {
+        method: 'POST',
+        headers: { 'x-api-key': ctx.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: ctx.env.BRIEF_MODEL || DEFAULT_MODEL,
+          max_tokens: 700,
+          system: BRIEF_SYSTEM,
+          messages: [{ role: 'user', content: JSON.stringify(facts) }],
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+      if (!text) throw new Error('empty');
+      return { text, by: j.model || 'claude' };
+    }
+    const r = await ctx.env.AI.run(aiModel(ctx.env), {
+      messages: [{ role: 'system', content: BRIEF_SYSTEM }, { role: 'user', content: JSON.stringify(facts) }],
+      max_tokens: 700, temperature: 0.2,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const j = await res.json();
-    const text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+    const text = waiText(r).trim();
     if (!text) throw new Error('empty');
-    return { text, by: j.model || 'claude' };
+    if (!numbersGrounded(text, JSON.stringify(facts), fallback)) throw new Error('AI wording added a number that is not in the facts');
+    return { text, by: aiModel(ctx.env) };
   } catch (e) {
     return { text: fallback, by: 'rules', aiError: e.message };
   }
@@ -1245,7 +1285,7 @@ export async function handle(req, env, fetchImpl = fetch) {
     for (const p of cfg.places) days[p.id] = (await kvGet(env, `hist:${p.id}`, [])).length;
     const day = localParts(now, cfg.settings.tz).date;
     const cam = state.camAI && state.camAI.date === day ? state.camAI : { date: day, used: 0 };
-    return json(req, { ok: true, version: VERSION, places: cfg.places.length, lastRun: state.lastRun || null, health: state.health || {}, historyDays: days, settings: cfg.settings, notify: env.NTFY_TOPIC ? 'ntfy' : 'none', ai: !!env.ANTHROPIC_API_KEY, cameraAI: { enabled: !!env.ANTHROPIC_API_KEY, used: cam.used, cap: cfg.settings.camCap ?? 50, places: cfg.places.filter((p) => p.camAI && p.cams?.length).length } });
+    return json(req, { ok: true, version: VERSION, places: cfg.places.length, lastRun: state.lastRun || null, health: state.health || {}, historyDays: days, settings: cfg.settings, notify: env.NTFY_TOPIC ? 'ntfy' : 'none', ai: aiKind(env), cameraAI: { enabled: !!aiKind(env), model: aiModel(env), used: cam.used, cap: cfg.settings.camCap ?? 50, places: cfg.places.filter((p) => p.camAI && p.cams?.length).length } });
   }
   if (req.method === 'GET' && path === '/places') {
     const cfg = await loadCfg(env);
@@ -1342,8 +1382,8 @@ export async function handle(req, env, fetchImpl = fetch) {
       const r = await buildReport({ ...ctx, budget: ctx.sub + 12 }, { lat: TEST_PLACE.lat, lon: TEST_PLACE.lon, name: TEST_PLACE.name, start: new Date(now.getTime() - 86400e3).toISOString(), end: now.toISOString() });
       for (const s2 of r.report.sources) results.push({ id: `report: ${s2.name}`, ok: s2.ok, count: s2.ok ? r.report.items.length : null, ms: Date.now() - t1, error: s2.error || null });
     } catch (e) { results.push({ id: 'report', ok: false, count: null, ms: Date.now() - t1, error: e.message }); }
-    results.push({ id: 'camera AI', ok: true, count: null, ms: 0, error: null, note: env.ANTHROPIC_API_KEY ? 'key present (not called by the self-test)' : 'off: no ANTHROPIC_API_KEY' });
-    return json(req, { ok: results.every((r) => r.ok), point: TEST_PLACE.name, ms: Date.now() - t0, subrequests: ctx.sub, checks: results, notify: env.NTFY_TOPIC ? 'ntfy configured' : 'no ntfy topic', ai: !!env.ANTHROPIC_API_KEY });
+    results.push({ id: 'camera AI', ok: true, count: null, ms: 0, error: null, note: aiKind(env) ? `${aiKind(env)}: ${aiModel(env)} (not called by the self-test)` : 'off: no AI binding and no ANTHROPIC_API_KEY' });
+    return json(req, { ok: results.every((r) => r.ok), point: TEST_PLACE.name, ms: Date.now() - t0, subrequests: ctx.sub, checks: results, notify: env.NTFY_TOPIC ? 'ntfy configured' : 'no ntfy topic', ai: aiKind(env) });
   }
   if (req.method === 'GET' && path === '/report') {
     const q = url.searchParams;

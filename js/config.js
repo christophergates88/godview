@@ -84,11 +84,16 @@ export const ENDPOINTS = {
     '&f=geojson&maxAllowableOffset=0.005&geometryPrecision=4&orderByFields=poly_GISAcres%20DESC&resultRecordCount=400',
   fireIncidents: 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query' +
     '?where=IncidentTypeCategory%3D%27WF%27&outFields=IncidentName,IncidentSize,PercentContained,FireDiscoveryDateTime,POOState,POOCounty,UniqueFireIdentifier&f=geojson&resultRecordCount=2000',
-  firms: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/{key}/VIIRS_SNPP_NRT/{w},{s},{e},{n}/1',
+  // Satellite fire detections (NASA FIRMS VIIRS, last 7 days), as served keyless by Esri Living Atlas.
+  viirsHotspots: 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Satellite_VIIRS_Thermal_Hotspots_and_Fire_Activity/FeatureServer/0/query',
   volcanoes: 'https://volcanoes.usgs.gov/hans-public/api/volcano/getElevatedVolcanoes',
   riverGauges: 'https://api.water.noaa.gov/nwps/v1/gauges?bbox.xmin={w}&bbox.ymin={s}&bbox.xmax={e}&bbox.ymax={n}&srid=EPSG_4326',
   drought: 'https://droughtmonitor.unl.edu/data/json/usdm_current.json',
   // Ground & infrastructure
+  // Georgia 511: a copy of the official feed, rebuilt about every 15 minutes by the
+  // Lookout repo's GitHub Action with the owner's key (no key needed here). With a
+  // key saved in Settings, the live 511GA API below is used instead.
+  ga511Feed: 'https://raw.githubusercontent.com/christophergates88/lookout/feeds/ga511.json',
   ga511Cameras: 'https://511ga.org/api/v2/get/cameras?key={key}&format=json',
   ga511Events: 'https://511ga.org/api/v2/get/event?key={key}&format=json',
   caltransCctv: 'https://cwwp2.dot.ca.gov/data/d{d}/cctv/cctvStatusD{dd}.json',
@@ -130,12 +135,12 @@ export const RELAY_HOSTS = {
   'mapservices.weather.noaa.gov': 'fallback',
 };
 
-// Optional free keys. A layer that needs one stays off with a note until the
-// key is entered in Settings > API keys. The key never leaves this browser
-// except inside requests to that service (through your own relay if needed).
+// Optional free keys. No layer needs one: a key only makes a layer fresher or
+// adds a backup source. The key never leaves this browser except inside
+// requests to that service (through your own relay if needed).
+// A layer may still declare needsKey (it then waits for the key); none do today.
 export const KEYS = {
-  ga511: { name: 'Georgia 511 developer key', url: 'https://511ga.org/developers/doc' },
-  firms: { name: 'NASA FIRMS map key', url: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/' },
+  ga511: { name: 'Georgia 511 developer key', why: 'Road events and cameras live from 511GA instead of the 15-minute copy', url: 'https://511ga.org/developers/doc' },
 };
 
 // Layer groups, in panel order.
@@ -182,12 +187,12 @@ export const INTERVALS = {
   events: { def: 900, min: 300 },
   firePerimeters: { def: 1800, min: 600 },
   fireIncidents: { def: 900, min: 300 },
-  firms: { def: 1800, min: 900 },
+  firms: { def: 1800, min: 900 },        // VIIRS passes are a few hours apart
   volcanoes: { def: 1800, min: 600 },
   rivers: { def: 900, min: 600 },
   drought: { def: 43200, min: 21600 },
-  ga511Cameras: { def: 1800, min: 600 },  // GA 511: 10 calls per minute
-  ga511Events: { def: 300, min: 120 },
+  ga511Cameras: { def: 1800, min: 600 },  // GA 511: 10 calls per minute (live API)
+  ga511Events: { def: 600, min: 120 },    // the keyless copy changes about every 15 minutes
   caltrans: { def: 1800, min: 600 },
   amtrak: { def: 120, min: 60 },
   bikeshare: { def: 300, min: 120 },

@@ -3,7 +3,7 @@
 import { LAYERS } from './layers/index.js';
 import { LayerManager } from './core/layer-manager.js';
 import { settings, apiKeys, firstRun } from './core/settings.js';
-import { applyMode } from './modes.js';
+import { applyMode, staggerOn } from './modes.js';
 import * as globe from './globe.js';
 import { initUI } from './ui.js';
 import { watchSelfTest } from './watch.js';
@@ -57,8 +57,7 @@ export async function start() {
   else {
     if (!settings.get('mode')) settings.set('mode', 'custom');
     const enabled = settings.get('enabled');
-    LAYERS.filter((l) => enabled[l.id] ?? l.defaultOn)
-      .forEach((l, i) => setTimeout(() => manager.enable(l.id, true), i * 250));
+    staggerOn(manager, LAYERS.filter((l) => enabled[l.id] ?? l.defaultOn).map((l) => l.id));
   }
 
   // Layers that depend on where you are looking (flights) reload when the camera stops.

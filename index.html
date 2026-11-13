@@ -54,6 +54,13 @@
       </button>
     </div>
     <div class="sheet-body">
+      <div class="sheet-tools">
+        <span id="st-count" class="st-count"></span>
+        <button id="btn-reset-layers" class="st-btn reset" aria-label="Reset layers to the start">
+          <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Reset
+        </button>
+        <button id="btn-all-off" class="st-btn" aria-label="Turn all layers off">All off</button>
+      </div>
       <input id="layer-filter" class="filter" type="search" placeholder="Filter layers (e.g. fire, camera, Georgia)" aria-label="Filter layers">
       <div id="layer-list" class="layer-list"></div>
       <h2 class="sec-title">View</h2>
@@ -127,7 +134,7 @@
     <div class="hint-card">
       <h2>Three taps</h2>
       <ol>
-        <li><b>Pick a mode</b> at the bottom: Around me, Sky, Storm…</li>
+        <li><b>Pick a mode</b> at the bottom: Around me, Sky, Storm… <b>Reset</b> (far left) puts it back.</li>
         <li><b>Tap anything</b> on the map for the story behind it.</li>
         <li><b>Tap the bell</b> for your places, alerts and morning brief.</li>
       </ol>

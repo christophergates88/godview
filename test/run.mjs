@@ -635,6 +635,116 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await c2.close();
 }
 
+// ------------------------------------------------------------ scenario 8 (v6): one-tap Reset + Undo, All off, no keys needed, in-app dialogs
+{
+  const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true };
+  const context = await browser.newContext(iphone);
+  const counts = await setupRoutes(context, {});
+  const page = await context.newPage();
+  const errors = []; const dialogs = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('dialog', (d) => { dialogs.push(d.type() + ': ' + d.message()); d.dismiss().catch(() => {}); });
+  const onIds = () => page.evaluate(() => window.GodView.layers.filter((l) => window.GodView.manager.state[l.id].enabled).map((l) => l.id).sort());
+  const ready = () => page.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await page.goto(BASE, { waitUntil: 'load' });
+  await ready();
+  await page.waitForTimeout(4000);
+  const start = await onIds();
+  // No keys anywhere: Georgia 511 and satellite fire detections work from keyless sources.
+  const st = await waitLayers(page, ['ga511Events']);
+  check('no key: Georgia road events load from the keyless copy', st.ga511Events.status === 'ok' && st.ga511Events.count === 2 && /copy from/.test(st.ga511Events.note), `${st.ga511Events.status} ${st.ga511Events.count} ${st.ga511Events.message || st.ga511Events.note}`);
+  await page.evaluate(() => { window.GodView.manager.enable('ga511Cameras', true); window.GodView.manager.enable('firms', true); });
+  const st2 = await waitLayers(page, ['ga511Cameras', 'firms']);
+  check('no key: Georgia cameras load from the copy (pictures from 511GA)', st2.ga511Cameras.status === 'ok' && st2.ga511Cameras.count === 2 && /pictures are live/.test(st2.ga511Cameras.note), `${st2.ga511Cameras.status} ${st2.ga511Cameras.count} ${st2.ga511Cameras.note}`);
+  check('no key: satellite fire detections load (VIIRS via Esri)', st2.firms.status === 'ok' && st2.firms.count === 2 && (counts['services9.arcgis.com'] || 0) >= 1 && !(counts['firms.modaps.eosdis.nasa.gov'] > 0), `${st2.firms.status} ${st2.firms.count} ${st2.firms.message || ''}`);
+  const cam = await page.evaluate(() => window.GodView.manager.describe('ga511Cameras', '186'));
+  check('camera card from the copy keeps the live 511GA picture', /511ga\.org\/map\/Cctv\/186/.test(cam?.image || ''), String(cam?.image));
+  const ga511Fetches = counts['raw.githubusercontent.com'] || 0;
+  check('cameras and road events share one download of the copy', ga511Fetches === 1, `downloads: ${ga511Fetches}`);
+  const needKey = await page.evaluate(() => window.GodView.layers.filter((l) => l.needsKey || window.GodView.manager.state[l.id].status === 'needs-key').map((l) => l.id));
+  check('no layer needs a key', needKey.length === 0, needKey.join(','));
+  // Reset from the bottom row: Everything (part way through switching on), then Reset.
+  await page.click('#mode-everything');
+  await page.waitForTimeout(1800);
+  // Read what is on and press Reset in one step, so the comparison below uses
+  // exactly what the app saw at the moment of the tap (layers keep switching on).
+  const midway = await page.evaluate(() => { const on = window.GodView.layers.filter((l) => window.GodView.manager.state[l.id].enabled).map((l) => l.id).sort(); document.getElementById('mode-reset').click(); return on; });
+  await page.waitForTimeout(3500);
+  const afterReset = await onIds();
+  const toastTxt = await page.evaluate(() => ({ text: document.getElementById('toast').innerText, hidden: document.getElementById('toast').hidden, undo: !!document.querySelector('#toast .t-act') }));
+  check('Reset tile: back to exactly the starting layers (pending switch-ons cancelled)', JSON.stringify(afterReset) === JSON.stringify(start) && midway.length > start.length, `start=${start.length} midway=${midway.length} after=${afterReset.length}`);
+  check('Reset says what happened and offers Undo', !toastTxt.hidden && /reset/i.test(toastTxt.text) && toastTxt.undo, JSON.stringify(toastTxt));
+  const modeAfter = await page.evaluate(() => ({ mode: window.GodView.settings.get('mode'), lit: [...document.querySelectorAll('#chips-on .mode.on')].map((b) => b.id) }));
+  check('after Reset the "Around me" tile is lit', modeAfter.mode === 'around' && JSON.stringify(modeAfter.lit) === '["mode-around"]', JSON.stringify(modeAfter));
+  await page.screenshot({ path: path.join(outDir, 'v6-iphone-reset-undo.png') });
+  await page.click('#toast .t-act');
+  await page.waitForTimeout(midway.length * 250 + 2500);
+  const undone = await onIds();
+  const undoneMode = await page.evaluate(() => window.GodView.settings.get('mode'));
+  check('Undo brings back what was on before Reset', JSON.stringify(undone) === JSON.stringify(midway) && undoneMode === 'everything', `before=${midway.length} undone=${undone.length} mode=${undoneMode}`);
+  // All off from the layer list, with Undo
+  await page.click('#chip-all');
+  await page.waitForTimeout(400);
+  const head = await page.evaluate(() => ({ count: document.getElementById('st-count').textContent, reset: !!document.getElementById('btn-reset-layers'), off: !!document.getElementById('btn-all-off') }));
+  check('layer list header: count + Reset + All off', /\d+ of \d+ layers on/.test(head.count) && head.reset && head.off, JSON.stringify(head));
+  await page.screenshot({ path: path.join(outDir, 'v6-iphone-list-tools.png') });
+  await page.click('#btn-all-off');
+  await page.waitForTimeout(600);
+  const none = await onIds();
+  const noneState = await page.evaluate(() => ({ mode: window.GodView.settings.get('mode'), lit: document.querySelectorAll('#chips-on .mode.on').length, count: document.getElementById('st-count').textContent }));
+  check('All off: nothing on, no mode tile lit, header says so', none.length === 0 && noneState.mode === 'none' && noneState.lit === 0 && /All \d+ layers off/.test(noneState.count), JSON.stringify(noneState));
+  await page.click('#toast .t-act');
+  await page.waitForTimeout(undone.length * 250 + 2500);
+  check('Undo after All off restores the layers', JSON.stringify(await onIds()) === JSON.stringify(undone));
+  // Reset from the list header
+  await page.click('#btn-reset-layers');
+  await page.waitForTimeout(3500);
+  check('list "Reset" button resets too', JSON.stringify(await onIds()) === JSON.stringify(start));
+  // Settings: Reset at the top, keys optional and tucked away, "Reset all settings" uses an in-app dialog
+  await page.click('#sheet-handle').catch(() => {});
+  await page.click('#btn-settings');
+  await page.waitForTimeout(300);
+  const set = await page.evaluate(() => {
+    const b = document.getElementById('settings-body');
+    const titles = [...b.querySelectorAll('.sec-title')].map((h) => h.textContent);
+    return { first: titles[0], keysNote: b.innerText.includes('None needed'), keysClosed: b.querySelector('.keys-more') ? !b.querySelector('.keys-more').open : false, titles };
+  });
+  check('Settings: "Layers" (Reset) comes first; keys say "None needed" and are tucked away', set.first === 'Layers' && set.keysNote && set.keysClosed, JSON.stringify(set));
+  await page.evaluate(() => window.GodView.settings.set('units', 'metric'));
+  await page.evaluate(() => [...document.querySelectorAll('#settings-body button')].find((b) => b.textContent === 'Reset all settings').click());
+  await page.waitForTimeout(300);
+  const dlg = await page.evaluate(() => ({ shown: !document.getElementById('dlg')?.hidden, title: document.querySelector('#dlg h2')?.textContent }));
+  check('"Reset all settings" asks in an in-app dialog (works in the iPhone app)', dlg.shown && /Reset all settings/.test(dlg.title || ''), JSON.stringify(dlg));
+  await page.screenshot({ path: path.join(outDir, 'v6-iphone-dialog.png') });
+  await page.click('#dlg [data-v="0"]');
+  await page.waitForTimeout(300);
+  check('Cancel keeps the settings', (await page.evaluate(() => window.GodView.settings.get('units'))) === 'metric' && (await page.evaluate(() => document.getElementById('dlg').hidden)));
+  await page.evaluate(() => [...document.querySelectorAll('#settings-body button')].find((b) => b.textContent === 'Reset all settings').click());
+  await page.waitForTimeout(300);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'load' }).catch(() => {}), page.click('#dlg [data-v="1"]')]);
+  await ready();
+  await page.waitForTimeout(3000);
+  const fresh = await page.evaluate(() => ({ units: window.GodView.settings.get('units'), mode: window.GodView.settings.get('mode') }));
+  check('confirming resets everything on this device', fresh.units === 'imperial' && fresh.mode === 'around', JSON.stringify(fresh));
+  check('no browser pop-up dialogs were used', dialogs.length === 0, dialogs.join(' | '));
+  const bad = errors.filter((e) => !/favicon|net::ERR_FAILED|Failed to load resource/.test(e));
+  check('[v6] no unexpected console errors', bad.length === 0, bad.slice(0, 4).join(' | '));
+  await context.close();
+
+  // The copy is old: road events are not shown as current; cameras still work (pictures are live)
+  const c2 = await browser.newContext(iphone);
+  await setupRoutes(c2, { ga511FeedAgeMs: 2 * 86400e3 });
+  const p2 = await c2.newPage();
+  await p2.goto(BASE, { waitUntil: 'load' });
+  await p2.waitForFunction(() => window.GodView && document.getElementById('boot') === null, null, { timeout: 60000 }).catch(() => {});
+  await p2.evaluate(() => { window.GodView.manager.enable('ga511Events', true); window.GodView.manager.enable('ga511Cameras', true); });
+  const s3 = await waitLayers(p2, ['ga511Events', 'ga511Cameras']);
+  check('old copy: road events hidden with a plain reason', s3.ga511Events.status === 'error' && /2 days ago/.test(s3.ga511Events.message) && /hidden/.test(s3.ga511Events.message), s3.ga511Events.message);
+  check('old copy: cameras still shown, with the list\'s age', s3.ga511Cameras.status === 'ok' && /2 days ago/.test(s3.ga511Cameras.note), s3.ga511Cameras.note);
+  await c2.close();
+}
+
 await browser.close();
 server.close();
 const failed = results.filter((r) => !r.ok);

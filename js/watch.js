@@ -8,6 +8,7 @@ import { escapeHtml, fmt } from './core/units.js';
 import { settings } from './core/settings.js';
 import * as globe from './globe.js';
 import { renderReportsTab, presetPoint } from './reports.js';
+import { ask } from './dialog.js';
 
 const KEY = 'godview.watch.v1';
 const $ = (id) => document.getElementById(id);
@@ -158,7 +159,7 @@ function wireCommon() {
     toastFn('Watch connected on this device.');
     open('places');
   });
-  $('w-forget')?.addEventListener('click', () => { if (confirm('Remove the watch key from this device?')) { save(null); render(); } });
+  $('w-forget')?.addEventListener('click', async () => { if (await ask({ title: 'Disconnect this device?', text: 'GodView forgets the Watch key on this device. Your places keep being watched; open the setup link again to reconnect.', ok: 'Disconnect', danger: true })) { save(null); render(); } });
 }
 
 // ---------------------------------------------------------------- places (tiles)
@@ -301,7 +302,7 @@ async function renderDetail() {
   $('wd-fly').addEventListener('click', () => { close(); globe.flyTo(p.lat, p.lon, Math.max(30, p.radiusKm * 3)); globe.setMarker('place', p.lat, p.lon, '#3ee6c4'); });
   $('wd-edit').addEventListener('click', () => addForm(p));
   $('wd-del').addEventListener('click', async () => {
-    if (!confirm(`Stop watching ${p.name}?`)) return;
+    if (!(await ask({ title: `Stop watching ${p.name}?`, text: 'Its alerts stop. Its history is kept for now.', ok: 'Stop watching', danger: true }))) return;
     try { const j = await api('/places', { method: 'PUT', body: { places: data.places.filter((x) => x.id !== p.id) } }); data.places = j.places; detailId = null; render(); } catch (e) { toastFn(`Could not remove: ${e.message}`); }
   });
 }
@@ -352,7 +353,7 @@ async function renderBrief(fresh) {
   if (!b) { box.innerHTML = '<p class="muted">No morning brief yet. It arrives at 6:15 each morning.</p><button class="btn primary" id="wb-now">Brief me now</button>'; $('wb-now').addEventListener('click', () => renderBrief(true)); return; }
   const lines = String(b.text || '').split('\n').filter(Boolean);
   const nv = (b.facts || []).map((f) => `<div class="nvn">${(f.history?.items || []).slice(0, 4).map((it) => `<div class="nv ${it.unusual ? 'odd' : ''}"><span>${escapeHtml(f.place.name)} · ${escapeHtml(it.label)}</span><b>${escapeHtml(String(it.now))}</b><small>normal: ${escapeHtml(it.normal)}</small></div>`).join('')}</div><p class="muted small">${escapeHtml(f.history?.note || '')}</p>`).join('');
-  box.innerHTML = `<div class="brief-when">${escapeHtml(new Date(b.at).toLocaleString(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' }))}${b.by && b.by !== 'rules' ? ' · worded by Claude' : ''}</div>
+  box.innerHTML = `<div class="brief-when">${escapeHtml(new Date(b.at).toLocaleString(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' }))}${b.by && b.by !== 'rules' ? ` · worded by ${/claude/i.test(b.by) ? 'Claude' : 'AI'}` : ''}</div>
     <div class="brief-text">${lines.map((l) => l.startsWith('Do:') ? `<p class="do">${escapeHtml(l.slice(3).trim())}</p>` : `<p>${escapeHtml(l)}</p>`).join('')}</div>
     ${nv}
     <button class="btn" id="wb-now">Brief me now</button>`;
@@ -365,7 +366,7 @@ function camsHtml(p) {
   const cam = lastStatus?.s?.cameraAI;
   if (!cams.length) return '<p class="muted small">No cameras on this place. Tap a Georgia 511 or Caltrans camera on the map and choose "Watch this camera".</p>';
   return `<div class="w-cams"><h4 class="sec-title">Cameras</h4>${cams.map((c) => `<div class="key-item"><span>${escapeHtml(c.name)}</span><button class="btn small-btn danger" data-rmcam="${escapeHtml(c.id)}">Remove</button></div>`).join('')}
-    <label class="field"><span>Camera AI<small>Claude looks at a frame every hour and when something happens nearby; reports only what is visible. ${cam ? `${cam.used} of ${cam.cap} looks used today.` : ''}${cam && !cam.enabled ? ' Needs the Anthropic key in the Watch service.' : ''}</small></span>
+    <label class="field"><span>Camera AI<small>AI looks at a frame every hour and when something happens nearby; it reports only what is visible. ${cam ? `${cam.used} of ${cam.cap} looks used today.` : ''}${cam && !cam.enabled ? ' Turns on after the next Watch update.' : ''}${cam && cam.model ? ` (${escapeHtml(cam.model)})` : ''}</small></span>
     <span class="switch"><input type="checkbox" id="wd-camai" ${p.camAI ? 'checked' : ''}><span></span></span></label></div>`;
 }
 async function savePlace(np) {

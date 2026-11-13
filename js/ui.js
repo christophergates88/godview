@@ -9,9 +9,10 @@ import * as globe from './globe.js';
 import { buildBrief } from './brief.js';
 import * as watch from './watch.js';
 import { inferFromManager } from './infer.js';
-import { MODES, GROUP_COLORS, applyMode } from './modes.js';
+import { MODES, GROUP_COLORS, applyMode, staggerOn, cancelPending, snapshot, restore, resetLayers, allOff, atStart } from './modes.js';
 import { initStatus } from './status.js';
 import { initHint } from './hint.js';
+import { ask, choose } from './dialog.js';
 
 const $ = (id) => document.getElementById(id);
 const Cesium = () => window.Cesium;
@@ -25,6 +26,7 @@ export function initUI(opts) {
   LAYERS = opts.layers;
   viewer = opts.viewer;
   buildSheet();
+  initSheetTools();
   buildSegments();
   initCard();
   initSearch();
@@ -46,10 +48,21 @@ export function initUI(opts) {
 }
 
 // ---------------------------------------------------------------- toast
+// toast('Saved') or toast('Layers reset', 6000, { label: 'Undo', onClick })
 let toastTimer = null;
-export function toast(msg, ms = 3500) {
+export function toast(msg, ms = 3500, action = null) {
   const t = $('toast');
-  t.textContent = msg;
+  t.textContent = '';
+  const s = document.createElement('span');
+  s.textContent = msg;
+  t.appendChild(s);
+  if (action && action.label) {
+    const b = document.createElement('button');
+    b.className = 't-act';
+    b.textContent = action.label;
+    b.addEventListener('click', () => { t.hidden = true; clearTimeout(toastTimer); try { action.onClick(); } catch (e) { console.error(e); } });
+    t.appendChild(b);
+  }
   t.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
@@ -88,13 +101,12 @@ function buildSheet() {
     });
     sec.style.setProperty('--group', GROUP_COLORS[g.id] || '#8b97a5');
     sec.querySelectorAll('.g-all').forEach((b) => b.addEventListener('click', () => {
-      setTimeout(toCustom, members.length * 260);
       const on = b.dataset.on === '1';
       // Turn on in a staggered way so a whole group does not fetch at once.
-      members.forEach((L, i) => {
-        if (on && L.needsKey && !apiKeys.get(L.needsKey)) return;
-        setTimeout(() => M.enable(L.id, on), on ? i * 250 : 0);
-      });
+      const ids = members.filter((L) => !L.needsKey || apiKeys.get(L.needsKey)).map((L) => L.id);
+      if (on) staggerOn(M, ids);
+      else { cancelPending(); members.forEach((L) => M.enable(L.id, false)); }
+      toCustom(on ? ids : []);
     }));
     const body = sec.querySelector('.group-body');
     for (const L of members) {
@@ -163,10 +175,47 @@ function buildSheet() {
   updateChips();
 }
 
+// ---------------------------------------------------------------- reset
+// One tap puts the layers back to how GodView starts; "All off" clears the map.
+// Both say what happened and offer Undo for a few seconds.
+const RESET_ICON = '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function offerUndo(msg, snap) {
+  toast(msg, 7000, { label: 'Undo', onClick: () => { restore(M, LAYERS, settings, snap); markMode(); toast('Undone', 1500); } });
+}
+function clearFilter() {
+  const f = $('layer-filter');
+  if (f && f.value) { f.value = ''; f.dispatchEvent(new Event('input')); }
+}
+export function doReset() {
+  if (atStart(M, LAYERS, settings, apiKeys) && settings.get('mode') === 'around') { clearFilter(); toast('Already showing the starting layers', 2200); return; }
+  const snap = snapshot(M, LAYERS, settings);
+  resetLayers(M, LAYERS, settings, apiKeys);
+  markMode();
+  clearFilter();
+  offerUndo('Layers reset to the start', snap);
+}
+export function doAllOff() {
+  const snap = snapshot(M, LAYERS, settings);
+  allOff(M, LAYERS, settings); // also stops layers still waiting to switch on
+  markMode();
+  if (snap.on.length) offerUndo('All layers off', snap); else toast('All layers off', 1800);
+}
+function initSheetTools() {
+  $('btn-reset-layers')?.addEventListener('click', doReset);
+  $('btn-all-off')?.addEventListener('click', doAllOff);
+}
+
 // ---------------------------------------------------------------- modes
 function buildModes() {
   const box = $('chips-on');
   box.innerHTML = '';
+  const rb = document.createElement('button');
+  rb.className = 'mode reset';
+  rb.id = 'mode-reset';
+  rb.setAttribute('aria-label', 'Reset layers to the start');
+  rb.innerHTML = `${RESET_ICON}<span>Reset</span>`;
+  rb.addEventListener('click', doReset);
+  box.appendChild(rb);
   for (const m of MODES) {
     const b = document.createElement('button');
     b.className = 'mode';
@@ -195,17 +244,23 @@ function markMode() {
   for (const m of MODES) $('mode-' + m.id)?.classList.toggle('on', m.id === cur);
 }
 // A hand-made change turns the mode into "My mix" and remembers it.
-function toCustom() {
-  settings.set('customEnabled', { ...settings.get('enabled') });
+// extraOn: layers that are about to switch on (still waiting their turn).
+function toCustom(extraOn = []) {
+  const c = { ...settings.get('enabled') };
+  for (const id of extraOn) c[id] = true;
+  settings.set('customEnabled', c);
   if (settings.get('mode') !== 'custom') { settings.set('mode', 'custom'); markMode(); }
 }
 
-// The "All layers" tile shows how many are on and flags problems.
+// The "All layers" tile shows how many are on and flags problems; the list
+// header says the same in words.
 function updateChips() {
   const on = LAYERS.filter((L) => M.state[L.id].enabled);
   const bad = on.some((L) => ['error', 'limited', 'needs-key'].includes(M.state[L.id].status));
   $('chip-all-n').textContent = `${on.length}/${LAYERS.length}`;
   $('chip-all').classList.toggle('bad', bad);
+  const c = $('st-count');
+  if (c) c.textContent = on.length ? `${on.length} of ${LAYERS.length} layers on` : `All ${LAYERS.length} layers off`;
 }
 const shortName = (n) => n.replace(/^Satellites: /, 'Sats: ').replace(/ \(.*\)$/, '');
 
@@ -418,10 +473,13 @@ function openItem(layerId, key, d) {
   const camUrl = (layerId === 'ga511Cameras' || layerId === 'caltrans') && d.image;
   camBtn.hidden = !(camUrl && watch.connected());
   camBtn.onclick = async () => {
-    const places = watch.placesList();
-    const target = places.length > 1 ? (prompt(`Add this camera to which place?\n${places.map((p, i) => `${i + 1}. ${p.name}`).join('\n')}`, '1') || '') : '1';
-    const p = places[Number(target) - 1] || places[0];
-    try { const name = await watch.addCamera({ id: `${layerId}-${key}`.slice(0, 40), name: d.title || 'Camera', url: d.image }, p?.id); toast(`Camera added to ${name}. Turn on Camera AI in that place to have it checked.`); } catch (e) { toast(e.message); }
+    const places = watch.placesList(); // may be empty until Watch has loaded; addCamera then uses the first place
+    let pid = places[0]?.id;
+    if (places.length > 1) {
+      pid = await choose({ title: 'Watch this camera from which place?', options: places.map((p) => ({ label: p.name, value: p.id })) });
+      if (!pid) return;
+    }
+    try { const name = await watch.addCamera({ id: `${layerId}-${key}`.slice(0, 40), name: d.title || 'Camera', url: d.image }, pid); toast(`Camera added to ${name}. Turn on Camera AI in that place to have it checked.`); } catch (e) { toast(e.message); }
   };
   showCard();
   // Extra details loaded on demand (tide readings, article summary, ...)
@@ -705,6 +763,13 @@ function openSettings() {
     M.settingChanged(key);
   };
 
+  sec('Layers');
+  const lr = document.createElement('div');
+  lr.className = 'inline';
+  lr.appendChild(button('Reset to start', () => { closeSettings(); doReset(); }, 'primary'));
+  lr.appendChild(button('Turn all off', () => { closeSettings(); doAllOff(); }));
+  field('<small>Reset puts back the layers GodView starts with. You can undo either for a few seconds.</small>', lr, true);
+
   sec('General');
   field('Units', select([['imperial', 'Imperial (ft, mph, °F)'], ['metric', 'Metric (m, km/h, °C)']], S.units, (v) => { change('units', v); cardTick(); }));
   field('Smooth aircraft motion<small>Estimates position between updates</small>', toggle(S.smoothMotion, (v) => change('smoothMotion', v)));
@@ -726,11 +791,16 @@ function openSettings() {
   row.appendChild(button('Reset to Georgia', () => { change('start', { ...DEFAULT_START }); openSettings(); }));
   field('', row, true);
 
-  sec('API keys (free, optional)');
+  sec('Keys');
   const note = document.createElement('div');
   note.className = 'about';
-  note.textContent = 'Stored only in this browser on this device. A key is sent only to its own service (through your data relay when that service needs it).';
+  note.textContent = 'None needed. Every layer works without a key. These only make a few layers fresher or add a backup source.';
   body.appendChild(note);
+  const kdet = document.createElement('details');
+  kdet.className = 'keys-more';
+  kdet.innerHTML = '<summary class="btn">Optional keys</summary><p class="about">Stored only in this browser on this device. A key is sent only to its own service (through your data relay when that service needs it).</p>';
+  body.appendChild(kdet);
+  target = kdet;
   for (const [name, k] of Object.entries(KEYS)) {
     const wrap = document.createElement('div');
     wrap.className = 'inline';
@@ -745,9 +815,9 @@ function openSettings() {
       M.settingChanged('key:' + name);
       openSettings();
     }));
-    if (apiKeys.get(name)) wrap.appendChild(button('Remove', () => { apiKeys.set(name, ''); openSettings(); }, 'danger'));
+    if (apiKeys.get(name)) wrap.appendChild(button('Remove', () => { apiKeys.set(name, ''); M.settingChanged('key:' + name); openSettings(); }, 'danger'));
     const users = LAYERS.filter((l) => l.needsKey === name || (l.usesKeys || []).includes(name)).map((l) => l.name).join(', ');
-    field(`${escapeHtml(k.name)}<small>Used by: ${escapeHtml(users)} · <a href="${k.url}" target="_blank" rel="noopener">get a key</a></small>`, wrap, true);
+    field(`${escapeHtml(k.name)}<small>${k.why ? escapeHtml(k.why) + ' · ' : ''}Used by: ${escapeHtml(users)} · <a href="${k.url}" target="_blank" rel="noopener">get a key</a></small>`, wrap, true);
   }
   const others = Object.keys(apiKeys.all()).filter((n) => !KEYS[n]);
   if (others.length) {
@@ -760,7 +830,7 @@ function openSettings() {
       it.appendChild(button('Remove', () => { apiKeys.set(name, ''); openSettings(); }, 'danger'));
       list.appendChild(it);
     }
-    body.appendChild(list);
+    kdet.appendChild(list);
   }
 
   sec('Data relay');
@@ -817,11 +887,12 @@ function openSettings() {
   disclaim.textContent = 'Public feeds can be late, incomplete or wrong. Not for navigation or safety decisions.';
   body.appendChild(disclaim);
 
-  sec('Reset');
+  sec('Start over');
   const r = document.createElement('div');
   r.className = 'inline';
-  r.appendChild(button('Reset all settings', () => {
-    if (!confirm('Reset all GodView settings on this device?')) return;
+  r.appendChild(button('Reset all settings', async () => {
+    const yes = await ask({ title: 'Reset all settings?', text: 'Layers, units, start location and refresh times go back to how GodView starts, on this device. Your Watch places and keys stay.', ok: 'Reset everything', danger: true });
+    if (!yes) return;
     settings.reset();
     location.reload();
   }, 'danger'));

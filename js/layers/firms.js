@@ -1,9 +1,14 @@
-// Satellite fire detections from the last 24 h (NASA FIRMS, VIIRS) for the area
-// in view. Needs a free NASA FIRMS "map key" (Settings > API keys, name: firms).
+// Satellite fire detections from the last 48 hours for the area in view: NASA
+// FIRMS VIIRS hot spots, served without a key by Esri's Living Atlas map
+// service (updated as new satellite passes arrive). No key needed.
 import { ENDPOINTS } from '../config.js';
 import { makePointLayer } from './lib/point-layer.js';
 import { ICONS } from './lib/icons.js';
-import { bbox, parseCSV } from './lib/geo.js';
+import { arcgisBox } from './lib/arcgis.js';
+
+const HOURS = 48;
+const SAT = { N20: 'NOAA-20', N21: 'NOAA-21', N: 'Suomi NPP', NPP: 'Suomi NPP' };
+const CONF = { low: 'Low', nominal: 'Nominal', high: 'High', l: 'Low', n: 'Nominal', h: 'High' };
 
 export default makePointLayer({
   id: 'firms',
@@ -13,29 +18,27 @@ export default makePointLayer({
   icon: ICONS.fire,
   shape: 'point',
   size: 6,
-  needsKey: 'firms',
   view: { maxKm: 4000, radiusKm: 600 },
   max: 3000,
-  attribution: 'Fire detections: NASA FIRMS (VIIRS S-NPP NRT), requires a free map key',
-  fetch(ctx, q) {
-    const b = bbox(q.lat, q.lon, q.radiusKm);
-    return ctx.net.get(ctx.net.fillUrl(ENDPOINTS.firms, { key: ctx.key('firms'), ...b }).replace(/%2C/g, ','), { type: 'text', timeoutMs: 25000 });
-  },
-  parse(text, ctx) {
-    const rows = parseCSV(String(text));
-    if (!rows.length || !rows[0].includes('latitude')) {
-      if (/invalid|key/i.test(String(text).slice(0, 200))) throw new ctx.net.FeedError('FIRMS rejected the key');
-      return [];
-    }
-    const h = rows[0];
-    const ix = (k) => h.indexOf(k);
-    return rows.slice(1).map((r, i) => ({
-      key: `f${i}`, lat: Number(r[ix('latitude')]), lon: Number(r[ix('longitude')]),
-      color: r[ix('confidence')] === 'h' ? '#ff2d2d' : '#ff8a3d',
+  attribution: 'Fire detections: NASA FIRMS VIIRS (near real time), served by Esri Living Atlas',
+  fetch: (ctx, q) => arcgisBox(ctx, ENDPOINTS.viirsHotspots, q, {
+    where: `hours_old <= ${HOURS}`, outFields: 'latitude,longitude,acq_time,satellite,confidence,frp,daynight,hours_old', max: 3000,
+  }),
+  parse: (j, ctx) => ((j && j.features) || []).map((f, i) => {
+    const p = f.properties || {};
+    const lon = f.geometry?.coordinates?.[0] ?? p.longitude;
+    const lat = f.geometry?.coordinates?.[1] ?? p.latitude;
+    const conf = CONF[String(p.confidence || '').toLowerCase()] || p.confidence || '—';
+    const hrs = Number(p.hours_old);
+    return {
+      key: `v${f.id ?? i}`, lat: Number(lat), lon: Number(lon),
+      color: conf === 'High' ? '#ff2d2d' : conf === 'Low' ? '#ffb020' : '#ff8a3d',
       title: 'Satellite fire detection',
-      subtitle: `${r[ix('acq_date')]} ${String(r[ix('acq_time')]).padStart(4, '0')} UTC · ${r[ix('satellite')]}`,
-      rows: [['Confidence', { l: 'Low', n: 'Nominal', h: 'High' }[r[ix('confidence')]] || r[ix('confidence')]], ['Fire power', `${r[ix('frp')]} MW`], ['Day/night', r[ix('daynight')] === 'D' ? 'Day' : 'Night']],
-      text: 'A hot spot seen by satellite. Can also be industrial heat sources or flares.',
-    }));
-  },
+      say: `A satellite saw a hot spot here${Number.isFinite(hrs) ? ` about ${hrs} hours ago` : ''}${conf !== '—' ? ` (${conf.toLowerCase()} confidence)` : ''}.`,
+      subtitle: [p.acq_time ? ctx.fmt.time(p.acq_time) : '', SAT[p.satellite] || p.satellite].filter(Boolean).join(' · '),
+      rows: [['Confidence', conf], ['Fire power', p.frp != null ? `${p.frp} MW` : '—'], ['Day/night', p.daynight === 'D' ? 'Day' : p.daynight === 'N' ? 'Night' : '—']],
+      text: 'A hot spot seen by satellite. It can also be a factory, a flare or a controlled burn.',
+    };
+  }),
+  note: () => `Last ${HOURS} hours`,
 });

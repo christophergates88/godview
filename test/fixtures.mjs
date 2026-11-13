@@ -250,3 +250,22 @@ export const reactors = () => ({ features: [
   { attributes: { OBJECTID: 1, Unit: 'Sample Point 1', Power: 100, ReportDt: Date.UTC(2026, 10, 12) }, geometry: { x: -81.76, y: 33.14 } },
   { attributes: { OBJECTID: 2, Unit: 'Sample Point 2', Power: 0, ReportDt: Date.UTC(2026, 10, 12) }, geometry: { x: -81.77, y: 33.15 } },
 ] });
+
+// ---- Keyless Georgia 511 copy (Lookout feed job) and VIIRS hot spots (Esri) ----
+// The copy uses the same camera id (186) as the live-API sample, so the same card tests apply.
+export const ga511Feed = (ageMs = 10 * 60e3) => ({
+  updated: new Date(now - ageMs).toISOString().replace(/\.\d{3}Z$/, '+00:00'),
+  cameras: [
+    { id: 186, name: 'SR 44 at Sample Rd (Sample)', road: 'SR 44', dir: 'Northbound', lat: 32.87, lon: -83.62, url: 'https://511ga.org/map/Cctv/186', ok: true },
+    { id: 187, name: 'I-75 at 10th St (Fulton)', road: 'I-75', dir: 'Southbound', lat: 33.29, lon: -84.39, url: 'https://511ga.org/map/Cctv/187', ok: true },
+    { id: 999, name: 'No position (sample)', road: 'I-20', dir: 'Unknown', lat: 0.0, lon: 0.0, url: 'https://511ga.org/map/Cctv/999', ok: false },
+  ],
+  events: [
+    { type: 'accidentsAndIncidents', sub: 'crash', sev: 'major', desc: 'Crash blocking right lane (sample).', road: 'I-16', dir: 'e', lat: '32.80', lon: '-83.55', updated: String(Math.floor(now / 1000) - 600) },
+    { type: 'roadwork', sub: '', sev: 'minor', desc: 'Road construction on SR 22 (sample). Left lane blocked.', road: 'SR 22', dir: 's', lat: '33.08', lon: '-83.23', updated: String(Math.floor(now / 1000) - 7200) },
+  ],
+});
+export const viirs = () => ({ type: 'FeatureCollection', crs: { type: 'name', properties: { name: 'EPSG:4326' } }, features: [
+  { type: 'Feature', id: 501, geometry: { type: 'Point', coordinates: [-83.64, 32.85] }, properties: { latitude: 32.85, longitude: -83.64, acq_time: now - 5 * 3600e3, satellite: 'N20', confidence: 'nominal', frp: 5.4, daynight: 'D', hours_old: 5 } },
+  { type: 'Feature', id: 502, geometry: { type: 'Point', coordinates: [-83.81, 33.06] }, properties: { latitude: 33.06, longitude: -83.81, acq_time: now - 9 * 3600e3, satellite: 'N21', confidence: 'high', frp: 22.7, daynight: 'N', hours_old: 9 } },
+] });

@@ -55,7 +55,7 @@ elif p.startswith('/accounts/acct123/storage/kv/namespaces') and method == 'POST
 elif p == '/accounts/acct123/workers/scripts/godview-watch' and method == 'PUT':
     meta = json.loads(open([f for f in forms if f.startswith('metadata=@')][0].split('=@')[1].split(';')[0]).read())
     mod = [f for f in forms if f.startswith('worker.js=@')][0]
-    good = meta.get('main_module') == 'worker.js' and meta['bindings'][0]['type'] == 'kv_namespace' and 'application/javascript+module' in mod
+    good = meta.get('main_module') == 'worker.js' and meta['bindings'][0]['type'] == 'kv_namespace' and {'type': 'ai', 'name': 'AI'} in meta['bindings'] and 'application/javascript+module' in mod
     body = ok({'id': 'godview-watch'}) if good else {'success': False, 'errors': [{'message': 'bad upload ' + json.dumps(meta)}]}
 elif p.endswith('/schedules'): body = ok({'schedules': json.loads(data)})
 elif p == '/accounts/acct123/workers/subdomain': body = ok({'subdomain': 'testsub'})

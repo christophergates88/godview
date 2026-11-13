@@ -7,7 +7,7 @@
 #   GET  /accounts                                            find the account id
 #   GET  /accounts/{acct}/storage/kv/namespaces?per_page=100  find KV "godview-watch"
 #   POST /accounts/{acct}/storage/kv/namespaces               create it if missing
-#   PUT  /accounts/{acct}/workers/scripts/godview-watch       upload worker (multipart: metadata + worker.js)
+#   PUT  /accounts/{acct}/workers/scripts/godview-watch       upload worker (multipart: metadata + worker.js; bindings KV + Workers AI)
 #   PUT  /accounts/{acct}/workers/scripts/godview-watch/schedules   cron every 5 minutes
 #   GET  /accounts/{acct}/workers/subdomain                   the account's workers.dev name
 #   POST /accounts/{acct}/workers/scripts/godview-watch/subdomain   turn on the workers.dev address
@@ -114,7 +114,7 @@ import json, sys
 print(json.dumps({
   "main_module": "worker.js",
   "compatibility_date": sys.argv[2],
-  "bindings": [{"type": "kv_namespace", "name": "KV", "namespace_id": sys.argv[1]}],
+  "bindings": [{"type": "kv_namespace", "name": "KV", "namespace_id": sys.argv[1]}, {"type": "ai", "name": "AI"}],
   "keep_bindings": ["secret_text"],
 }))
 PY
@@ -166,7 +166,8 @@ put_secret() {
 put_secret WATCH_TOKEN "$WATCH_TOKEN"
 put_secret NTFY_TOPIC "$NTFY_TOPIC"
 AKEY="$(kc_get godview-anthropic)"
-if [ -n "$AKEY" ]; then put_secret ANTHROPIC_API_KEY "$AKEY"; say "Claude wording for the brief: on. Camera checks can be turned on per place in the app (off until you do; at most 50 pictures a day)."; else say "Claude wording for the brief: off (rule-based brief). Camera checks need this key too, so they stay off."; fi
+if [ -n "$AKEY" ]; then put_secret ANTHROPIC_API_KEY "$AKEY"; say "AI for the brief and camera checks: Claude (your Anthropic key)."; else say "AI for the brief and camera checks: Cloudflare Workers AI (built in, no key needed)."; fi
+say "Camera checks stay off until you turn them on for a place in the app (at most 50 pictures a day)."
 say "Secrets saved."
 
 # ---------------------------------------------------------------- 7. Self-test

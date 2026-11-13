@@ -84,6 +84,10 @@ export function answer(u, mode) {
     case 'www.nhc.noaa.gov': return J(F.nhc());
     case 'services3.arcgis.com': return J(/Perimeters/.test(p) ? F.perimeters() : F.incidents());
     case 'firms.modaps.eosdis.nasa.gov': return T(F.firmsCsv(), 'text/csv');
+    case 'services9.arcgis.com': return mode.viirsDown ? J({ error: { code: 500, message: 'down' } }) : J(F.viirs());
+    case 'raw.githubusercontent.com':
+      if (/lookout\/feeds\/ga511\.json/.test(p)) return mode.ga511FeedDown ? { status: 404, type: 'text/plain', body: 'nf' } : J(F.ga511Feed(mode.ga511FeedAgeMs));
+      return null;
     case 'volcanoes.usgs.gov': return J(F.volcanoes());
     case 'api.water.noaa.gov': return J(F.gauges());
     case 'droughtmonitor.unl.edu': return J(F.drought());

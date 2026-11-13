@@ -513,3 +513,35 @@ body.card-open .sheet { transform: translateY(110%); }
   .no-print { display: none !important; }
   .paper { max-width: none; border-radius: 0; padding: 0; }
 }
+
+/* ---------- Reset, list tools, in-app dialogs, Undo ---------- */
+.mode.reset { --mode: #e8edf2; width: 72px; background: rgba(255,255,255,0.08); }
+.mode.reset svg { width: 23px; height: 23px; }
+.sheet-tools { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; }
+.st-count { flex: 1; font-size: 13px; font-weight: 700; color: var(--gv-muted); }
+.st-btn {
+  min-height: 40px; padding: 0 14px; border-radius: 11px; border: 1px solid var(--gv-line);
+  background: rgba(255,255,255,0.07); font-weight: 800; font-size: 14px; display: inline-flex; align-items: center; gap: 6px;
+}
+.st-btn svg { width: 18px; height: 18px; }
+.st-btn.reset { background: var(--gv-accent); color: var(--gv-bg); border-color: transparent; }
+.st-btn:active { transform: scale(0.96); }
+.keys-more { margin: 4px 0 6px; }
+.keys-more[open] > summary { margin-bottom: 4px; }
+
+.dlg { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; background: rgba(0,0,0,0.62); padding: 20px; }
+.dlg[hidden] { display: none; }
+.dlg-card { width: min(400px, 100%); background: var(--gv-panel-solid); border: 1px solid var(--gv-line); border-radius: 20px; padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.dlg-card h2 { margin: 0 0 8px; font-size: 21px; font-weight: 900; line-height: 1.25; }
+.dlg-card p { margin: 0 0 16px; color: var(--gv-muted); font-size: 15px; line-height: 1.5; }
+.dlg-btns { display: flex; gap: 10px; margin-top: 6px; }
+.dlg-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 12px; }
+.dlg-list .btn { justify-content: flex-start; text-align: left; }
+.btn.danger-fill { background: var(--gv-bad); color: #fff; border-color: transparent; }
+
+#toast { display: flex; align-items: center; justify-content: center; gap: 12px; }
+#toast[hidden] { display: none; }
+#toast .t-act {
+  flex: none; min-height: 34px; padding: 0 14px; border-radius: 9px; border: 0;
+  background: var(--gv-bg); color: var(--gv-accent); font-weight: 900; font-size: 14px;
+}

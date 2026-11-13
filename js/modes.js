@@ -40,14 +40,54 @@ export function modeLayers(mode, layers, settings, apiKeys) {
   return layers.filter((l) => ids.has(l.id) && have(l)).map((l) => l.id);
 }
 
-// Switch layers: turn off what the mode does not use, then turn on the rest a
-// quarter-second apart so they do not all fetch at once.
+// Layers are switched on a quarter-second apart so they do not all fetch at
+// once. Every switch goes through here, so a newer action (a mode, Reset, All
+// off, Undo) cancels switch-ons still waiting from an older one.
+let pending = [];
+export function cancelPending() { pending.forEach(clearTimeout); pending = []; }
+export function staggerOn(manager, ids, step = 250) {
+  ids.filter((id) => manager.state[id] && !manager.state[id].enabled)
+    .forEach((id, i) => pending.push(setTimeout(() => manager.enable(id, true), i * step)));
+}
+
+// Switch layers: turn off what the mode does not use, then turn on the rest.
 export function applyMode(manager, layers, settings, apiKeys, id) {
   const mode = MODES.find((m) => m.id === id) || MODES[0];
   const want = new Set(modeLayers(mode, layers, settings, apiKeys));
   if (mode.id !== 'custom' && settings.get('mode') === 'custom') settings.set('customEnabled', { ...settings.get('enabled') });
+  cancelPending();
   for (const l of layers) if (!want.has(l.id) && manager.state[l.id].enabled) manager.enable(l.id, false);
-  [...want].filter((idx) => !manager.state[idx].enabled).forEach((idx, i) => setTimeout(() => manager.enable(idx, true), i * 250));
+  staggerOn(manager, [...want]);
   settings.set('mode', mode.id);
   return mode;
+}
+
+// ---------------------------------------------------------------- reset
+// "Reset" puts the layers back to how GodView starts (the Around me set).
+// "All off" clears the map. Both can be undone from the message that follows.
+export const START_MODE = 'around';
+
+export function snapshot(manager, layers, settings) {
+  return { mode: settings.get('mode') || 'custom', on: layers.filter((l) => manager.state[l.id].enabled).map((l) => l.id) };
+}
+export function restore(manager, layers, settings, snap) {
+  cancelPending();
+  const want = new Set(snap.on);
+  for (const l of layers) if (!want.has(l.id) && manager.state[l.id].enabled) manager.enable(l.id, false);
+  staggerOn(manager, snap.on);
+  settings.set('mode', snap.mode);
+}
+export function resetLayers(manager, layers, settings, apiKeys) {
+  return applyMode(manager, layers, settings, apiKeys, START_MODE);
+}
+export function allOff(manager, layers, settings) {
+  if (settings.get('mode') === 'custom') settings.set('customEnabled', { ...settings.get('enabled') }); // keep "My mix"
+  cancelPending();
+  for (const l of layers) if (manager.state[l.id].enabled) manager.enable(l.id, false);
+  settings.set('mode', 'none'); // no mode tile lit
+}
+// True when exactly the starting layers are on.
+export function atStart(manager, layers, settings, apiKeys) {
+  const want = new Set(modeLayers(MODES.find((m) => m.id === START_MODE), layers, settings, apiKeys));
+  return layers.every((l) => !!manager.state[l.id].enabled === want.has(l.id));
 }

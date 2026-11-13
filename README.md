@@ -80,7 +80,7 @@ Settings > Data relay holds the relay address (the built-in one is used when bla
 ## Layers (46) and their sources
 
 "Direct" = the browser reads it itself. "Relay" = through your data relay.
-"Key" = needs a free key in Settings > API keys. "Computed" = no network.
+"Key" = an optional key in Settings > Keys (no layer needs one). "Computed" = no network.
 "Area" = loads only the area in view and reloads when you move.
 On by default for a first visit: Flights, Satellites (brightest), Rocket launches,
 Day/night, US weather alerts, Earthquakes, Fires & events.
@@ -110,11 +110,11 @@ Day/night, US weather alerts, Earthquakes, Fires & events.
 | Hazards | Earthquakes | USGS | Direct | |
 | Hazards | Fires & events | NASA EONET | Direct | Not official |
 | Hazards | Wildfire perimeters / incidents (US) | NIFC WFIGS (ArcGIS) | Direct (relay fallback) | Perimeters simplified, largest 300 |
-| Hazards | Satellite fire detections | NASA FIRMS | Key (`firms`) | Area; last 24 h |
+| Hazards | Satellite fire detections | NASA FIRMS VIIRS via Esri Living Atlas | Direct, no key | Area; last 48 h |
 | Hazards | Volcano alerts (US) | USGS HANS | Direct | Elevated volcanoes only |
 | Hazards | River gauges & floods | NOAA NWPS | Direct | Area |
 | Hazards | Drought (US) | U.S. Drought Monitor | Relay | Large file; weekly |
-| Ground | Georgia traffic cameras / road incidents | Georgia 511 | Key (`ga511`) + relay | 10 calls/min |
+| Ground | Georgia traffic cameras / road incidents | Georgia 511: the copy rebuilt ~every 15 min by the Lookout repo's feed job (raw.githubusercontent.com); with an optional key, the live 511GA API via relay | Direct, no key | Road events older than 3 h are hidden |
 | Ground | California traffic cameras | Caltrans CWWP2 | Direct | Area (California only) |
 | Ground | Amtrak trains | Amtraker API (unofficial) | Direct | |
 | Ground | Bike share docks | GBFS (6 Lyft-run US systems) | Direct | Area; nearest supported system |
@@ -167,6 +167,18 @@ save downloaded data in the cache, as normal use does).
   planespotters.net with the photographer credited. An owner is shown only when
   it is an airline, company or agency, never a private person.
 - The map draws at up to 2x sharpness when still and lighter while moving.
+- **Reset in one tap (v6):** the first tile in the bottom row, "Reset", puts
+  the layers back to how GodView starts (the Around me set) and cancels any
+  layers still waiting to switch on. "All layers" has Reset and All off at the
+  top, with a count of what is on; Settings has both too. Each says what it did
+  and offers Undo for a few seconds.
+- **No keys needed (v6):** every layer works without a key. Georgia 511 comes
+  from the copy the Lookout repo's GitHub Action builds with the owner's key
+  (kept in that repo's secrets); satellite fire detections come from Esri's
+  keyless VIIRS service. A 511GA key saved in Settings > Keys only makes Georgia
+  511 live instead of every ~15 minutes.
+- **No browser pop-ups (v6):** the iPhone app's web view ignores confirm() and
+  prompt(), so every question GodView asks is an in-app box (`js/dialog.js`).
 
 ## Watch, Brief, Remember (the watch service)
 
@@ -200,8 +212,10 @@ route, client).
 **Alerts:** "act now" always notifies; "heads-up" notifies except in quiet hours
 (10 PM–6 AM), when it waits for the morning brief; "info" only goes in the brief.
 Nothing repeats. "Possibly" items (see below) are always marked as guesses. Places live only in your own Cloudflare storage, never in this
-code. If a Keychain item `godview-anthropic` exists, Claude (model
-`claude-haiku-5-5`) words the brief using only the facts; otherwise the brief is
+code. The brief is worded by AI using only the facts: Cloudflare Workers AI by
+default (no key; if it writes a number that is not in the facts, the rule-based
+text is used instead), or Claude (`claude-haiku-5-5`) if a Keychain item
+`godview-anthropic` exists when you deploy. If the AI fails, the brief is
 rule-based.
 
 **Tests:** `node server/watch/test/run.mjs` (worker logic with mocked sources and
@@ -256,24 +270,27 @@ keyless source for them was found, so hail comes from warnings and reports.
 
 **Camera checks (off by default).** On a Georgia 511 or Caltrans camera card,
 "Watch this camera" adds that public road camera to one of your places (up to
-6). Turn on "Camera AI" for that place to have Claude look at a frame every
-hour, or straight away when a heads-up or act-now alert fires. Claude reports
-only what is visible (flooding, smoke, crash, blocked road, snow/ice); an
-alert is raised only at 70% confidence or more. A daily cap (50 pictures,
-shown in the app) is kept by the service. It needs the `godview-anthropic`
-Keychain item (the same one as the brief) and works only with Georgia 511 and
-Caltrans cameras, never private cameras. Model: `claude-haiku-5-5`, or set
-the `VISION_MODEL` variable on the worker.
+6). Turn on "Camera AI" for that place to have AI look at a frame every
+hour, or straight away when a heads-up or act-now alert fires. It reports only
+what is visible (flooding, smoke, crash, blocked road, snow/ice); an alert is
+raised only at 70% confidence or more. A daily cap (50 pictures, shown in the
+app) is kept by the service. No key needed: it uses Cloudflare Workers AI
+(`@cf/meta/llama-4-scout-17b-16e-instruct`, the `AI` binding the deploy script
+adds; free daily allowance of 10,000 neurons, about 50 neurons a picture). If
+the `godview-anthropic` Keychain item exists when you deploy, Claude
+(`claude-haiku-5-5`, or the `VISION_MODEL` variable) is used instead. It works
+only with Georgia 511 and Caltrans cameras, never private cameras.
 
 **Free-plan budget.** The watch run stays under 45 outside requests. A report
 uses about 6; each camera check uses 2 (the picture and Claude). The CPU-time
 limit of the free plan is the main risk with many places and cameras.
 
 ## Settings (all stored only in this browser)
-Units, start location (default: Georgia, USA), API keys (Georgia 511, NASA
-FIRMS), data relay, earthquake feed, event window, refresh intervals (with
-safe minimums), sources and credits, reset. Group open/closed and which layers
-are on are remembered.
+Layers (Reset to start, Turn all off) at the top; then units, start location
+(default: Georgia, USA), optional keys (none needed; tucked under "Optional
+keys"), data relay, earthquake feed, event window, refresh intervals (with safe
+minimums), sources and credits, and "Reset all settings" (asks first, in an
+in-app box). Group open/closed and which layers are on are remembered.
 
 Note: every site under `YOUR-USERNAME.github.io` shares one browser storage
 area (about 5 MB). GodView keeps its use small (the Starlink satellite group is

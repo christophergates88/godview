@@ -345,6 +345,49 @@ let afterFirst;
   check('nothing notable -> no event', !JSON.parse(e3.KV.m.get('log:home') || '[]').some((x) => x.check === 'camera'));
 }
 
+// ---------------------------------------------------------------- v6: Cloudflare Workers AI (no key needed)
+{
+  // A stand-in for the Workers AI binding: records calls, answers like Workers AI does ({ response }).
+  const fakeAI = (answers) => { const calls = []; return { calls, run: async (model, input) => { calls.push({ model, input }); const a = answers(input, calls.length); if (a instanceof Error) throw a; return a; } }; };
+  const at = new Date('2026-11-13T11:15:00Z'); // 6:15 New York: morning brief time
+  check('aiKind: Claude when a key is set, else Workers AI, else none', W.aiKind({ ANTHROPIC_API_KEY: 'k', AI: fakeAI(() => ({})) }) === 'claude' && W.aiKind({ AI: fakeAI(() => ({})) }) === 'workers-ai' && W.aiKind({}) === null);
+  check('numbers check: only numbers already in the facts are allowed', W.numbersGrounded('61° and 30 mph', 'high 61 gusts 30') && !W.numbersGrounded('a 90% chance', 'chance 70'));
+  // Brief worded by Workers AI
+  const ai = fakeAI((input) => ({ response: `Test Home: rain today. ${JSON.parse(input.messages[1].content)[0].place.name} stays under watch.` }));
+  const e = env({ AI: ai }); await seed(e);
+  await W.runAll(e, at, makeFetch({ now: at.getTime() }));
+  const b = JSON.parse(e.KV.m.get('brief:latest'));
+  check('no key + Workers AI -> brief worded by Workers AI (Llama 4 Scout), facts-only instruction', b.by === '@cf/meta/llama-4-scout-17b-16e-instruct' && ai.calls[0].model === '@cf/meta/llama-4-scout-17b-16e-instruct' && /ONLY the facts/.test(ai.calls[0].input.messages[0].content), `${b.by} ${ai.calls.length}`);
+  // A made-up number sends it back to the rule-based text
+  const ai2 = fakeAI(() => ({ response: 'Test Home: a 97% chance of a tornado.' }));
+  const e2 = env({ AI: ai2 }); await seed(e2);
+  await W.runAll(e2, at, makeFetch({ now: at.getTime() }));
+  const b2 = JSON.parse(e2.KV.m.get('brief:latest'));
+  check('Workers AI adds a number not in the facts -> rule-based text instead', b2.by === 'rules' && /number/.test(b2.aiError || '') && b2.text === b2.rulesText, b2.aiError);
+  const ai3 = fakeAI(() => new Error('Workers AI: daily free allocation used up'));
+  const e3 = env({ AI: ai3 }); await seed(e3);
+  await W.runAll(e3, at, makeFetch({ now: at.getTime() }));
+  const b3 = JSON.parse(e3.KV.m.get('brief:latest'));
+  check('Workers AI error (e.g. daily allowance used up) -> rule-based text', b3.by === 'rules' && /allocation/.test(b3.aiError || ''));
+  // Camera frames read by Workers AI: the picture goes as a data: URL
+  const cam = { id: 'ga-186', name: 'SR 44 at Sample Rd', url: 'https://511ga.org/map/Cctv/186' };
+  const vis = fakeAI(() => ({ response: 'Here you go: {"findings":[{"what":"crash","confidence":0.9,"note":"two cars stopped in the right lane"}]}' }));
+  const e4 = env({ AI: vis }); await seed(e4, [{ ...F.PLACES[0], cams: [cam], camAI: true }]);
+  let t = new Date('2026-11-13T17:00:00Z').getTime();
+  while (Math.floor(t / 300000) % 12 !== 0) t += 300000;
+  const f4 = makeFetch({ now: t, tornado: false });
+  await W.runAll(e4, new Date(t), f4);
+  const call = vis.calls.find((c) => Array.isArray(c.input.messages?.[0]?.content));
+  const parts = call?.input.messages[0].content || [];
+  check('camera AI without a key: Workers AI gets the frame as a data: URL plus the strict instruction', !!call && parts.some((x) => x.type === 'image_url' && /^data:image\/jpeg;base64,/.test(x.image_url.url)) && parts.some((x) => x.type === 'text' && /ONLY what is clearly visible/.test(x.text)) && !f4.sent.vision, JSON.stringify(parts.map((x) => x.type)));
+  const ce = JSON.parse(e4.KV.m.get('log:home') || '[]').find((x) => x.check === 'camera');
+  check('camera AI without a key: "Camera shows a crash" heads-up, model named in the evidence', ce && ce.sev === W.SEV.heads && /appears to show a crash/.test(ce.text) && ce.data.evidence.some((x) => /llama-4-scout/.test(x)), ce?.text);
+  const s4 = await (await W.handle(req('/status'), e4, makeFetch({ now: t }))).json();
+  check('/status: AI = workers-ai, camera AI enabled with its model', s4.ai === 'workers-ai' && s4.cameraAI.enabled === true && /llama-4-scout/.test(s4.cameraAI.model), JSON.stringify({ ai: s4.ai, cam: s4.cameraAI }));
+  const s5 = await (await W.handle(req('/status'), env(), makeFetch({ now: t }))).json();
+  check('/status with no AI at all: camera AI off', s5.ai === null && s5.cameraAI.enabled === false);
+}
+
 // ---------------------------------------------------------------- v5: conditions reports
 {
   const e = env(); await seed(e);
