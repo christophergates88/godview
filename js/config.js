@@ -29,12 +29,13 @@ export const BASEMAPS = {
     maxZoom: 19,
     credit: 'Imagery: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
   },
+  // CARTO's dark map started asking for an API key (Nov 2026); Esri's dark gray canvas is keyless.
   dark: {
-    name: 'Dark map (CARTO)',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    maxZoom: 19,
-    credit: 'Map: © OpenStreetMap contributors, © CARTO',
+    name: 'Dark map (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    maxZoom: 16,
+    credit: 'Map: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community',
   },
   streets: {
     name: 'Streets (OpenStreetMap)',

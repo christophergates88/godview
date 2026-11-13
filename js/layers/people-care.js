@@ -55,6 +55,22 @@ let careSrc = { kind: 'pack', built: null };
 const stars = (n) => (Number.isFinite(n) && n >= 1 && n <= 5 ? `${'★'.repeat(n)}${'☆'.repeat(5 - n)} ${n} of 5` : 'Not rated');
 const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+// CMS hospital type -> words for a sentence
+export function hospitalKind(type) {
+  const t = String(type || '');
+  if (/veteran/i.test(t)) return 'VA hospital';
+  if (/defense/i.test(t)) return 'military hospital';
+  if (/child/i.test(t)) return 'children’s hospital';
+  if (/critical access/i.test(t)) return 'critical access hospital';
+  if (/rural emergency/i.test(t)) return 'rural emergency hospital';
+  if (/psychiatric/i.test(t)) return 'psychiatric hospital';
+  if (/acute care/i.test(t)) return 'acute care hospital';
+  const w = t.toLowerCase().replace(/s$/, '');
+  return w ? (/hospital/.test(w) ? w : `${w} hospital`) : 'hospital';
+}
+const an = (w) => `${/^[aeiou]/i.test(w) ? 'an' : 'a'} ${w}`;
+// ['a', 'b', 'c'] -> 'a, b and c'
+const andJoin = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
 // Care Compare page of one hospital or nursing home (by its CMS certification number).
 export function careCompareUrl(it) {
@@ -82,7 +98,11 @@ export function parsePackCare(items) {
   return items.map((it, i) => {
     const hospital = it.kind === 'H';
     const kind = hospital ? 'Hospital' : 'Nursing home';
-    const v = it.name ? recordName(String(it.name), { mode: 'entity' }) : { show: false };
+    // A Medicare-certified facility's registered name is a business name, so it is
+    // shown even when it reads like a person's name ("Archbold Mitchell"), except
+    // when CMS lists the owner as an individual and the name looks like a person's.
+    const personLike = !!it.name && !recordName(String(it.name), { mode: 'entity' }).show;
+    const v = { show: !!it.name && (!personLike || (!!it.ccn && !/individual/i.test(it.ownership || ''))) };
     const legal = it.legal ? recordName(String(it.legal), { mode: 'entity' }) : { show: false };
     const rated = Number.isFinite(it.overall);
     const rows = [];
@@ -97,11 +117,10 @@ export function parsePackCare(items) {
       if (safe) rows.push(['Safety of care', safe]);
       if (back) rows.push(['Readmissions', back]);
       if (it.ownership) rows.push(['Ownership', it.ownership]);
-      const bits = [];
-      if (rated) bits.push(`rated ${it.overall} of 5 stars by Medicare`);
-      if (/^yes/i.test(it.emergency || '')) bits.push('with an emergency department');
-      if (Number(it.mortWorse) > 0) bits.push(`worse than the national rate on ${plural(it.mortWorse, 'death-rate measure')}`);
-      say = `${v.show ? it.name : 'This hospital'} is ${/^[aeiou]/i.test(type) ? 'an' : 'a'} ${type.toLowerCase().replace(/s$/, '')}${bits.length ? ', ' + bits.join(', ').replace(/, ([^,]*)$/, ' and $1') : ''}.`;
+      const kindWords = hospitalKind(type);
+      say = `${v.show ? `${it.name} is` : 'This is'} ${an(kindWords)}${rated ? `, rated ${it.overall} of 5 stars by Medicare` : ''}.`
+        + (/^yes/i.test(it.emergency || '') ? ' It has an emergency department.' : '')
+        + (Number(it.mortWorse) > 0 ? ` Its death rates are worse than the national rate on ${plural(it.mortWorse, 'measure')}.` : '');
     } else {
       rows.push(['Type', kind]);
       if (rated) {
@@ -125,10 +144,10 @@ export function parsePackCare(items) {
       if (it.chain) rows.push(['Part of', it.chain]);
       const bits = [];
       if (rated) bits.push(`rated ${it.overall} of 5 stars overall by Medicare`);
-      if (it.fines) bits.push(`fined ${plural(it.fines, 'time')} (${money(it.fineDollars || 0)}) in the last 3 years`);
+      if (it.fines) bits.push(`fined ${it.fines === 1 ? 'once' : `${it.fines} times`} (${money(it.fineDollars || 0)}) in the last 3 years`);
       if (it.abuse === 1) bits.push('cited for abuse');
       if (it.focus === 'SFF') bits.push('on the Special Focus list for serious quality problems');
-      say = `${v.show ? it.name : 'This nursing home'} is a nursing home${bits.length ? ', ' + bits.join(', ').replace(/, ([^,]*)$/, ' and $1') : ''}.`;
+      say = v.show ? `${it.name} is a nursing home${bits.length ? `, ${andJoin(bits)}` : ''}.` : `This nursing home${bits.length ? ` is ${andJoin(bits)}` : ' has no Medicare rating listed'}.`;
     }
     if (v.show && it.address) rows.push(['Address', [it.address, it.city, it.state].filter(Boolean).join(', ')]);
     if (it.approx === 1) rows.push(['On the map', 'At the centre of its ZIP code (the street address could not be placed)']);

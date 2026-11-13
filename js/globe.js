@@ -7,6 +7,7 @@ const Cesium = window.Cesium;
 
 let viewer = null;
 let baseLayer = null;
+let labelLayer = null;
 let styleStage = null;
 let followProxy = null;
 let markerEntities = {};
@@ -83,8 +84,14 @@ export function setBasemap(id) {
   });
   const layer = new Cesium.ImageryLayer(provider);
   if (baseLayer) viewer.imageryLayers.remove(baseLayer, true);
+  if (labelLayer) { viewer.imageryLayers.remove(labelLayer, true); labelLayer = null; }
   viewer.imageryLayers.add(layer, 0);
   baseLayer = layer;
+  // Place names drawn as a separate see-through layer just above the map (dark map).
+  if (def.labels) {
+    labelLayer = new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({ url: def.labels, maximumLevel: def.maxZoom }));
+    viewer.imageryLayers.add(labelLayer, 1);
+  }
   viewer.scene.requestRender();
 }
 

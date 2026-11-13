@@ -151,7 +151,7 @@ t('data pack: care rows -> cards (stars, citations, fines, abuse, turnover, hosp
   assert.equal(rows(c[0])['Death rates'], '1 measure worse than the national rate');
   assert.equal(rows(c[0])['Readmissions'], '2 measures worse than the national rate');
   assert.equal(rows(c[0])['Safety of care'], '1 better');
-  assert.match(c[0].say, /^Sample Medical Center is an acute care hospital, rated 3 of 5 stars by Medicare, with an emergency department and worse than the national rate on 1 death-rate measure\.$/);
+  assert.equal(c[0].say, 'Sample Medical Center is an acute care hospital, rated 3 of 5 stars by Medicare. It has an emergency department. Its death rates are worse than the national rate on 1 measure.');
   assert.match(c[0].link.href, /care-compare\/details\/hospital\/119999\?state=GA$/);
   assert.equal(c[1].color, '#ff4d5e');                          // abuse citation -> flagged red
   assert.ok(flagged(items[1]) && !flagged(items[2]) && !flagged(items[0]));

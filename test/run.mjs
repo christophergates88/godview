@@ -699,6 +699,13 @@ import { results, check, BASE, outDir, browser, openApp, waitLayers, screenPos, 
   await ready();
   await page.waitForTimeout(4000);
   const start = await onIds();
+  // Dark map: Esri's keyless dark canvas plus a place-name layer (CARTO's now asks for a key); switching back removes the names
+  const maps = await page.evaluate(() => {
+    const G = window.GodView; const urls = () => Array.from({ length: G.viewer.imageryLayers.length }, (_, i) => G.viewer.imageryLayers.get(i).imageryProvider.url || '');
+    G.globe.setBasemap('dark'); const dark = urls(); G.globe.setBasemap('satellite'); const sat = urls();
+    return { dark: dark.slice(0, 2), satCount: sat.filter((u) => /arcgisonline/.test(u)).length, anyCarto: [...dark, ...sat].some((u) => /cartocdn/.test(u)) };
+  });
+  check('dark map is Esri\'s keyless dark canvas with place names; switching back leaves one base map', /World_Dark_Gray_Base/.test(maps.dark[0]) && /World_Dark_Gray_Reference/.test(maps.dark[1]) && maps.satCount === 1 && !maps.anyCarto, JSON.stringify(maps));
   // No keys anywhere: Georgia 511 and satellite fire detections work from keyless sources.
   const st = await waitLayers(page, ['ga511Events']);
   check('no key: Georgia road events load from the keyless copy', st.ga511Events.status === 'ok' && st.ga511Events.count === 2 && /copy from/.test(st.ga511Events.note), `${st.ga511Events.status} ${st.ga511Events.count} ${st.ga511Events.message || st.ga511Events.note}`);

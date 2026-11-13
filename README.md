@@ -185,6 +185,8 @@ save downloaded data in the cache, as normal use does).
   mode. Nursing homes show Medicare's ratings, fines, abuse citations and staff
   turnover; hospitals show their star rating and death-rate, safety and
   readmission measures against the national rate.
+- **Dark map without a key (v6.1):** CARTO's dark map started showing "API key
+  required"; the Dark map is now Esri's keyless dark gray canvas with place names.
 - **Connecting a device to Watch (v6.1):** each device keeps its own key, and the
   iPhone app keeps its own copy apart from Safari. The Deploy script copies the
   setup link to the Mac's clipboard; on the iPhone, paste it in the bell panel
